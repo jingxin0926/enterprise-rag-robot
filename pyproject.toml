@@ -1,0 +1,50 @@
+[project]
+name = "robot-myself"
+version = "0.1.0"
+description = "企业级智能问答机器人 - 基于 DeepSeek + LangChain"
+requires-python = ">=3.11,<3.13"
+# ----------------------------------------------------------------
+# 运行时依赖（P0 阶段最小集合，后续阶段递增）
+# ----------------------------------------------------------------
+dependencies = [
+    # Web 框架
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    #配置与校验
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.6.0",
+    #日志
+    "loguru>=0.7.2",
+    # HTTP 客户端
+    "httpx>=0.27.0",
+    # 工具库
+    "python-dotenv>=1.0.1",
+    "orjson>=3.10.0",
+    # AI/LLM
+    "openai>=1.50.0",
+    # 流氏 SSE 响应
+    "sse-startlette>=2.1.0",
+    # Redis(会话记忆)
+    "redis[hiredis]>=5.2.0",
+    # RAG - 向量库（内置 fastembed,ONNX推理，不依赖pyTorch）
+    "qdrant-client[fastmbed]>=1.12.0",
+    # RAG - 文本切分
+    "langchain-text-splitters>=0.3.0",
+    # RAG - 文件上传
+    "python-multipart>=0.0.12",
+    # RAG - 文档解析
+    "pymupdf>=1.25.0",
+    "python-docx>=1.1.0",
+    # RAG - BM25 全文检索（轻量，无需 ES）
+    "rank-bm25>=0.2.2",
+    # RAG - 中文分词（BM25 需要）
+    "jieba>=0.42.1",
+    # Agent - LangGraph 状态机编排
+    "langgraph>=0.4.0",
+    #工程化 - JWT鉴权
+    "pyjwt>=2.9.0",
+    "passlib[bcrypt]>=1.7.4",
+    "bcrypt==4.2.1",
+    # 工程化 - 限流
+    "slowapi>=0.1.9",
+]
