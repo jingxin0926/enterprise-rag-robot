@@ -1,8 +1,16 @@
+# ================================================================
+# 项目元数据 + 依赖管理 (PEP 621 标准)
+# 使用 uv 作为包管理器：https://github.com/astral-sh/uv
+# ================================================================
 [project]
-name = "robot-myself"
+name = "enterprise-rag-robot"
 version = "0.1.0"
 description = "企业级智能问答机器人 - 基于 DeepSeek + LangChain"
+readme = "README.md"
 requires-python = ">=3.11,<3.13"
+
+license = { text = "MIT" }
+
 # ----------------------------------------------------------------
 # 运行时依赖（P0 阶段最小集合，后续阶段递增）
 # ----------------------------------------------------------------
@@ -10,24 +18,24 @@ dependencies = [
     # Web 框架
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
-    #配置与校验
+    # 配置与校验
     "pydantic>=2.9.0",
     "pydantic-settings>=2.6.0",
-    #日志
+    # 日志
     "loguru>=0.7.2",
     # HTTP 客户端
     "httpx>=0.27.0",
     # 工具库
     "python-dotenv>=1.0.1",
     "orjson>=3.10.0",
-    # AI/LLM
+    # AI / LLM
     "openai>=1.50.0",
-    # 流氏 SSE 响应
-    "sse-startlette>=2.1.0",
-    # Redis(会话记忆)
+    # 流式 SSE 响应
+    "sse-starlette>=2.1.0",
+    # Redis（会话记忆）
     "redis[hiredis]>=5.2.0",
-    # RAG - 向量库（内置 fastembed,ONNX推理，不依赖pyTorch）
-    "qdrant-client[fastmbed]>=1.12.0",
+    # RAG - 向量库（内置 fastembed，ONNX 推理，不依赖 PyTorch）
+    "qdrant-client[fastembed]>=1.12.0",
     # RAG - 文本切分
     "langchain-text-splitters>=0.3.0",
     # RAG - 文件上传
@@ -41,7 +49,7 @@ dependencies = [
     "jieba>=0.42.1",
     # Agent - LangGraph 状态机编排
     "langgraph>=0.4.0",
-    #工程化 - JWT鉴权
+    # 工程化 - JWT 鉴权
     "pyjwt>=2.9.0",
     "passlib[bcrypt]>=1.7.4",
     "bcrypt==4.2.1",
@@ -55,7 +63,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.3.0",
-    "pytest-astncio>=0.24.0",
+    "pytest-asyncio>=0.24.0",
     "pytest-cov>=5.0.0",
     "ruff>=0.7.0",
     "mypy>=1.13.0",
@@ -96,8 +104,8 @@ select = [
     "N",   # pep8-naming
 ]
 ignore = [
-    "E501", #行过长（由formatter处理）
-    "B008", #FastAPI Depends() 在默认参数中是常见模式
+    "E501",  # 行过长（由 formatter 处理）
+    "B008",  # FastAPI Depends() 在默认参数中是常见模式
 ]
 
 [tool.ruff.format]
@@ -108,7 +116,7 @@ indent-style = "space"
 # Pytest 配置
 # ================================================================
 [tool.pytest.ini_options]
-testpaths = ["test"]
+testpaths = ["tests"]
 python_files = ["test_*.py"]
 asyncio_mode = "auto"
 addopts = "-v --tb=short"
@@ -125,12 +133,8 @@ ignore_missing_imports = true
 # 构建系统
 # ================================================================
 [build-system]
-requirs = ["hatchling"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
-
-
-
-
