@@ -18,7 +18,7 @@ from loguru import logger
 
 from app.infra.llm.deepseek_client import ChatMessage, get_deepseek_client
 from app.infra.vector.qdrant_store import get_qdrant_store
-from app.service.retrieval.hybrid_retriever import HybridResult, get_hybrid_retriever
+from app.service.retrieval.reranker import HybridResult, get_hybrid_retriever
 from app.service.retrieval.query_rewriter import QueryRewriter
 
 # RAG Prompt 模板
