@@ -1,7 +1,5 @@
 """
 聊天相关的请求/响应模型（DTO）
-
-类似 Java 中的 Request/Response VO
 """
 
 from pydantic import BaseModel, Field

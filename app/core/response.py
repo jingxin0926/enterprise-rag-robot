@@ -2,7 +2,7 @@
 统一响应封装
 
 设计要点：
-1. 类似 Spring Boot 中的 Result<T> / R<T>，所有接口返回统一结构
+1. 所有接口返回统一结构，便于前端统一处理
 2. 三个核心字段：code / message / data，外加 trace_id 便于追溯
 3. 提供 success / fail 静态方法，方便业务调用
 """

@@ -10,7 +10,7 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
-    container_name: rag-robot-app
+    container_name: smart-qa-app
     ports:
       - "8000:8000"
     environment:
@@ -39,7 +39,7 @@ services:
   # ==================== Redis ====================
   redis:
     image: redis:7-alpine
-    container_name: rag-robot-redis
+    container_name: smart-qa-redis
     ports:
       - "6379:6379"
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru

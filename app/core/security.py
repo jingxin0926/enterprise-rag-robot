@@ -2,7 +2,7 @@
 安全模块：JWT 鉴权 + 密码加密
 
 设计要点：
-1. JWT 无状态认证（类似 Spring Security + JWT）
+1. JWT 无状态认证
 2. 支持多租户：token 中携带 tenant_id
 3. 密码使用 bcrypt 加密存储
 4. Token 过期自动失效
@@ -21,7 +21,7 @@ from app.core.config import settings
 # 配置常量
 # ============================================================
 # JWT 密钥（生产环境从环境变量读取）
-JWT_SECRET_KEY = "enterprise-rag-robot-secret-key-change-in-production"
+JWT_SECRET_KEY = "smart-qa-system-jwt-secret-change-in-production"
 JWT_ALGORITHM = "HS256"
 # Token 过期时间（小时）
 ACCESS_TOKEN_EXPIRE_HOURS = 24

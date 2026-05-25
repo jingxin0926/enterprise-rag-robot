@@ -1,10 +1,10 @@
-# Enterprise RAG Robot · 企业级智能问答机器人
+# Smart QA System · 智能问答系统
 
-> 基于 DeepSeek + LangChain + LangGraph 的企业内部知识助手
+> 基于 DeepSeek 的 RAG 知识问答系统，支持文档检索、混合搜索、Agent 编排。
 
 ## 🎯 项目简介
 
-从零构建的**企业级** RAG（Retrieval-Augmented Generation）智能问答系统，具备完整的生产级能力。
+一套面向企业内部场景的 RAG（Retrieval-Augmented Generation）智能问答系统，覆盖从文档接入、向量检索到 Agent 编排的完整链路。
 
 ## 🧱 技术栈
 
@@ -18,15 +18,15 @@
 | 全文检索 | BM25（jieba 分词） |
 | 缓存 | Redis |
 | 鉴权 | JWT + bcrypt |
-| 部署 | Docker + K8s |
+| 部署 | Docker + Docker Compose |
 
 ## ✨ 核心能力
 
 - **完整 RAG 链路**：文档解析 → 切片 → Embedding → 向量存储 → 混合检索 → 生成
 - **混合检索**：BM25 + Vector + RRF 融合 + Query 改写
-- **Agent 编排**：Function Calling 自主决策（知识检索/时间/计算器）
+- **Agent 编排**：Function Calling 自主决策（知识检索 / 时间 / 计算器）
 - **流式输出**：SSE 实时打字效果
-- **企业工程化**：JWT 鉴权 / 多租户 / 接口限流 / Token 计费 / 链路追踪
+- **工程化能力**：JWT 鉴权 / 多租户 / 接口限流 / Token 计费 / 链路追踪
 
 ## 🚀 快速开始
 

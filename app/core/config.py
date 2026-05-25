@@ -2,7 +2,7 @@
 应用配置加载模块
 
 设计要点：
-1. 使用 pydantic-settings 从 .env 文件加载配置（类似 Spring Boot 的 application.yml + @ConfigurationProperties）
+1. 使用 pydantic-settings 从 .env 文件加载配置
 2. 支持多环境：通过 APP_ENV 切换 dev / test / prod
 3. 配置项强类型校验，启动时即可发现配置错误（fail-fast）
 4. 通过 lru_cache 实现单例，避免重复读取
@@ -50,7 +50,7 @@ class AppSettings(BaseSettings):
     # 应用基础
     # ============================================================
     app_env: AppEnv = Field(default=AppEnv.DEV, description="运行环境")
-    app_name: str = Field(default="enterprise-rag-robot", description="应用名")
+    app_name: str = Field(default="smart-qa-system", description="应用名")
     app_version: str = Field(default="0.1.0", description="版本号")
     app_port: int = Field(default=8000, description="监听端口")
     app_debug: bool = Field(default=True, description="是否开启 Debug")
@@ -116,7 +116,7 @@ def get_settings() -> AppSettings:
     """
     获取应用配置（单例）
 
-    类似 Spring 容器中的单例 Bean，全局只读取一次 .env
+    使用 lru_cache 实现进程内单例，全局只读取一次 .env
     """
     return AppSettings()
 

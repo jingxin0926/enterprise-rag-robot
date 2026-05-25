@@ -2,7 +2,7 @@
 异常体系
 
 设计要点：
-1. 定义业务异常基类 BizException，类似 Java 的自定义 RuntimeException
+1. 定义业务异常基类 BizException，便于全局拦截统一处理
 2. 通过错误码（ErrorCode）枚举集中管理，避免散落在各处的魔法字符串
 3. 错误码采用 6 位数字：前 3 位模块码 + 后 3 位错误序号
    - 000xxx：通用

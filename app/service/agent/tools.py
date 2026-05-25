@@ -2,7 +2,7 @@
 Agent 可用工具定义
 
 每个工具就是一个函数，Agent 根据用户意图自主决定是否调用。
-相当于 Java 里 Agent 可以调用的 "能力插件"。
+工具集合类似插件机制，可按需扩展。
 """
 
 from datetime import datetime

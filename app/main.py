@@ -1,5 +1,5 @@
 """
-FastAPI 应用入口（相当于 Spring Boot 的 @SpringBootApplication）
+FastAPI 应用入口
 
 启动方式：
     uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
@@ -65,7 +65,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
-        description="智能问答机器人 - DeepSeek + LangChain",
+        description="智能问答系统 - DeepSeek + RAG + Agent",
         # 仅开发环境暴露 docs，生产环境关闭
         docs_url="/docs" if settings.is_dev else None,
         redoc_url="/redoc" if settings.is_dev else None,

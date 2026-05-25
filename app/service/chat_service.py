@@ -7,7 +7,7 @@
 3. 调用 LLM，返回流式或普通响应
 4. Token 统计
 
-设计模式：类似 Spring 的 @Service，业务逻辑集中在这一层
+业务编排集中在这一层，对外暴露简洁的方法签名。
 """
 
 import json
@@ -22,7 +22,7 @@ from app.infra.cache.redis_client import get_redis
 from app.infra.llm.deepseek_client import ChatMessage, ChatResponse, get_deepseek_client
 
 # 系统提示词（后续可以做成可配置 / 多租户）
-SYSTEM_PROMPT = """你是一个企业内部知识助手。你的职责是：
+SYSTEM_PROMPT = """你是一个内部知识助手。你的职责是：
 1. 准确回答用户关于公司内部制度、流程、技术文档等方面的问题
 2. 如果不确定答案，诚实告知而非编造
 3. 回答简洁精准，使用中文

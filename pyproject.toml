@@ -3,9 +3,9 @@
 # 使用 uv 作为包管理器：https://github.com/astral-sh/uv
 # ================================================================
 [project]
-name = "enterprise-rag-robot"
+name = "smart-qa-system"
 version = "0.1.0"
-description = "企业级智能问答机器人 - 基于 DeepSeek + LangChain"
+description = "智能问答系统 - 基于 DeepSeek 的 RAG 知识问答"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 

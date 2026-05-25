@@ -11,7 +11,7 @@
 
 set -e
 
-echo "🚀 开始部署 Enterprise RAG Robot..."
+echo "🚀 开始部署 Smart QA System..."
 
 # 检查 Docker
 if ! command -v docker &> /dev/null; then

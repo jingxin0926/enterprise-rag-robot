@@ -4,7 +4,7 @@
 # 适用于：Ubuntu 22.04 / CentOS 8+
 #
 # 使用方法：
-#   curl -sSL https://raw.githubusercontent.com/jingxin0926/enterprise-rag-robot/main/deploy/server-setup.sh | bash
+#   curl -sSL https://raw.githubusercontent.com/jingxin0926/smart-qa-system/main/deploy/server-setup.sh | bash
 # 或：
 #   chmod +x deploy/server-setup.sh && ./deploy/server-setup.sh
 # ================================================================
@@ -53,14 +53,14 @@ fi
 
 # 创建工作目录
 echo "📁 创建工作目录..."
-mkdir -p /opt/rag-robot
-cd /opt/rag-robot
+mkdir -p /opt/smart-qa-system
+cd /opt/smart-qa-system
 
 echo ""
 echo "✅ 服务器初始化完成！"
 echo ""
 echo "📋 下一步："
-echo "   1. git clone https://github.com/jingxin0926/enterprise-rag-robot.git /opt/rag-robot"
-echo "   2. cd /opt/rag-robot"
+echo "   1. git clone https://github.com/jingxin0926/smart-qa-system.git /opt/smart-qa-system"
+echo "   2. cd /opt/smart-qa-system"
 echo "   3. cp .env.example .env && vim .env  # 填入 DEEPSEEK_API_KEY"
 echo "   4. ./deploy/deploy.sh               # 一键部署"

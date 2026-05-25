@@ -1,5 +1,5 @@
 """
-全局异常处理器（类似 Spring 的 @ControllerAdvice）
+全局异常处理器
 
 统一拦截 4 类异常并返回标准 R 结构：
 1. BizException        业务异常（已知错误码）
