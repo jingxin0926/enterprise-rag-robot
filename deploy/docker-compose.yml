@@ -1,0 +1,59 @@
+# ================================================================
+# Docker Compose 一键部署（开发 / 单机生产皆可）
+# 启动：docker compose up -d
+# ================================================================
+version: "3.8"
+
+services:
+  # ==================== 应用服务 ====================
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: rag-robot-app
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=prod
+      - LOG_LEVEL=INFO
+      - LOG_CONSOLE=true
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
+      - DEEPSEEK_MODEL=deepseek-chat
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - HF_ENDPOINT=https://hf-mirror.com
+    volumes:
+      - app-data:/app/data      # 向量库持久化
+      - app-logs:/app/logs      # 日志持久化
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G            # 内存限制（embedding 模型需要 ~2G）
+          cpus: "4"
+
+  # ==================== Redis ====================
+  redis:
+    image: redis:7-alpine
+    container_name: rag-robot-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+# ==================== 数据卷 ====================
+volumes:
+  app-data:
+  app-logs:
+  redis-data:
