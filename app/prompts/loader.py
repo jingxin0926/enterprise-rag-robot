@@ -7,10 +7,6 @@ Prompt 加载器
 3. 内置缓存，避免重复读取文件 IO
 4. 支持热重载（开发模式下每次读最新文件）
 
-对标 Java 类比：
-- 类似 Spring 中的 ResourceLoader + MessageSource
-- Prompt 文件就像 i18n 的 messages.properties，集中管理，代码中按 key 引用
-
 使用示例：
     from app.prompts.loader import PromptLoader
 
@@ -36,9 +32,9 @@ class PromptLoader:
     - 缓存已加载的模板（生产模式）
 
     设计决策：
-    - 用 .md 文件而非数据库：简历项目阶段够用，且面试官能直接看 Git 记录
-    - 用 {variable} 而非 Jinja2：轻量，无额外依赖
-    - 后续可扩展为从 Redis/DB 加载（多租户场景）
+    - 用 .md 文件管理：支持 Git 版本追踪，方便协作和 Code Review
+    - 用 {variable} 占位符：轻量无额外依赖，满足当前模板需求
+    - 后续可扩展为从 Redis/DB 加载（多租户场景下按租户加载不同 Prompt）
     """
 
     def __init__(self, prompts_dir: Path | None = None, cache_enabled: bool = True) -> None:

@@ -12,6 +12,7 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.chat import router as chat_router
 from app.api.v1.knowledge import router as knowledge_router
 from app.api.v1.agent import router as agent_router
+from app.api.v1.eval import router as eval_router
 
 api_router_v1 = APIRouter(prefix="/api/v1")
 
@@ -20,3 +21,4 @@ api_router_v1.include_router(auth_router)
 api_router_v1.include_router(chat_router)
 api_router_v1.include_router(knowledge_router)
 api_router_v1.include_router(agent_router)
+api_router_v1.include_router(eval_router)
