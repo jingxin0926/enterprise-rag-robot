@@ -20,7 +20,7 @@ from app.middleware.trace import get_trace_id
 from app.service.document_service import DocumentService
 from app.infra.vector.qdrant_store import get_qdrant_store
 from app.service.rag_service import RAGService
-from app.service.retrieval.reranker import get_hybrid_retriever
+from app.service.retrieval.hybrid_retriever import get_hybrid_retriever
 
 router = APIRouter(prefix="/knowledge", tags=["知识库"])
 

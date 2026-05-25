@@ -18,23 +18,12 @@ from loguru import logger
 
 from app.infra.llm.deepseek_client import ChatMessage, get_deepseek_client
 from app.infra.vector.qdrant_store import get_qdrant_store
-from app.service.retrieval.reranker import HybridResult, get_hybrid_retriever
+from app.prompts.loader import get_prompt_loader
+from app.service.retrieval.hybrid_retriever import HybridResult, get_hybrid_retriever
 from app.service.retrieval.query_rewriter import QueryRewriter
 
-# RAG Prompt 模板
-RAG_SYSTEM_PROMPT = """你是企业内部知识助手。请严格根据下方【参考资料】回答用户问题。
-
-规则：
-1. 只使用参考资料中的信息回答，不要编造内容
-2. 如果参考资料不足以回答问题，诚实告知"根据现有资料无法回答该问题"
-3. 回答时在末尾注明引用来源，格式：[来源: 文件名]
-4. 使用中文回答，简洁准确
-5. 支持 Markdown 格式化输出"""
-
-RAG_USER_TEMPLATE = """【参考资料】
-{context}
-
-【用户问题】
+# 用户消息模板（将检索结果和问题组装为用户消息）
+RAG_USER_TEMPLATE = """【用户问题】
 {question}"""
 
 
@@ -157,10 +146,11 @@ class RAGService:
                 rewritten_query=rewritten,
             )
 
-        # 3. 构建消息
-        user_content = RAG_USER_TEMPLATE.format(context=context, question=question)
+        # 3. 构建消息（从 Prompt 文件加载系统提示词，注入检索上下文）
+        system_prompt = get_prompt_loader().load("rag_system", context=context)
+        user_content = RAG_USER_TEMPLATE.format(question=question)
         messages = [
-            ChatMessage(role="system", content=RAG_SYSTEM_PROMPT),
+            ChatMessage(role="system", content=system_prompt),
             ChatMessage(role="user", content=user_content),
         ]
 
@@ -197,10 +187,11 @@ class RAGService:
             yield "抱歉，知识库中暂未找到与您问题相关的内容。请尝试换个说法，或确认相关文档是否已上传。"
             return
 
-        # 3. 构建消息
-        user_content = RAG_USER_TEMPLATE.format(context=context, question=question)
+        # 3. 构建消息（从 Prompt 文件加载系统提示词，注入检索上下文）
+        system_prompt = get_prompt_loader().load("rag_system", context=context)
+        user_content = RAG_USER_TEMPLATE.format(question=question)
         messages = [
-            ChatMessage(role="system", content=RAG_SYSTEM_PROMPT),
+            ChatMessage(role="system", content=system_prompt),
             ChatMessage(role="user", content=user_content),
         ]
 

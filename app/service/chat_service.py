@@ -20,13 +20,7 @@ from loguru import logger
 from app.core.config import settings
 from app.infra.cache.redis_client import get_redis
 from app.infra.llm.deepseek_client import ChatMessage, ChatResponse, get_deepseek_client
-
-# 系统提示词（后续可以做成可配置 / 多租户）
-SYSTEM_PROMPT = """你是一个内部知识助手。你的职责是：
-1. 准确回答用户关于公司内部制度、流程、技术文档等方面的问题
-2. 如果不确定答案，诚实告知而非编造
-3. 回答简洁精准，使用中文
-4. 必要时使用 Markdown 格式化输出（列表、代码块等）"""
+from app.prompts.loader import get_prompt_loader
 
 
 @dataclass
@@ -96,7 +90,9 @@ class ChatService:
 
         结构：[system_prompt] + [历史消息] + [当前用户输入]
         """
-        messages = [ChatMessage(role="system", content=SYSTEM_PROMPT)]
+        # 从 Prompt 文件加载系统提示词（结构化 Markdown）
+        system_prompt = get_prompt_loader().load("chat_system")
+        messages = [ChatMessage(role="system", content=system_prompt)]
 
         # 加载历史
         history = await self._get_history(session_id)

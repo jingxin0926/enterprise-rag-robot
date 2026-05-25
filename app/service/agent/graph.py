@@ -22,21 +22,8 @@ from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletionMessageToolCall
 
 from app.core.config import settings
+from app.prompts.loader import get_prompt_loader
 from app.service.agent.tools import AVAILABLE_TOOLS
-
-# 系统提示词
-AGENT_SYSTEM_PROMPT = """你是企业内部智能助手。你可以使用以下工具来帮助回答用户问题：
-
-1. search_knowledge_base: 搜索企业知识库（公司制度、流程、文档）
-2. get_current_time: 获取当前时间
-3. calculator: 数学计算
-
-使用规则：
-- 如果用户问的是公司相关的制度、流程、规范等问题，必须先用 search_knowledge_base 工具检索
-- 如果是简单的闲聊、问候、通用知识，直接回答即可
-- 如果需要计算，使用 calculator 工具
-- 回答使用中文，简洁准确
-- 引用知识库内容时标注来源"""
 
 # 最大工具调用轮次（防止死循环）
 MAX_TOOL_ROUNDS = 3
@@ -151,8 +138,9 @@ async def run_agent(
         timeout=settings.deepseek_timeout,
     )
 
-    # 构建消息
-    messages = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}]
+    # 构建消息（从 Prompt 文件加载系统提示词）
+    agent_system_prompt = get_prompt_loader().load("agent_system")
+    messages = [{"role": "system", "content": agent_system_prompt}]
     if history:
         messages.extend(history)
     messages.append({"role": "user", "content": user_message})
@@ -237,7 +225,9 @@ async def run_agent_stream(
         timeout=settings.deepseek_timeout,
     )
 
-    messages = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}]
+    # 构建消息（从 Prompt 文件加载系统提示词）
+    agent_system_prompt = get_prompt_loader().load("agent_system")
+    messages = [{"role": "system", "content": agent_system_prompt}]
     if history:
         messages.extend(history)
     messages.append({"role": "user", "content": user_message})

@@ -12,16 +12,7 @@ Query 改写（Query Rewriting）
 from loguru import logger
 
 from app.infra.llm.deepseek_client import ChatMessage, get_deepseek_client
-
-REWRITE_PROMPT = """你是一个搜索查询优化专家。请将用户的口语化问题改写为更精确的检索查询语句。
-
-规则：
-1. 保持原意不变，补全省略的主语和上下文
-2. 提取核心关键词，去除无意义的语气词
-3. 只返回改写后的一句话，不要解释
-
-用户问题：{question}
-改写后的检索语句："""
+from app.prompts.loader import get_prompt_loader
 
 
 class QueryRewriter:
@@ -50,11 +41,11 @@ class QueryRewriter:
             改写后的查询文本
         """
         try:
+            # 从 Prompt 文件加载改写指令
+            rewrite_prompt = get_prompt_loader().load("query_rewriter")
             messages = [
-                ChatMessage(
-                    role="user",
-                    content=REWRITE_PROMPT.format(question=question),
-                ),
+                ChatMessage(role="system", content=rewrite_prompt),
+                ChatMessage(role="user", content=question),
             ]
             response = await self._llm.chat(
                 messages,
