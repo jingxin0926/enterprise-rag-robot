@@ -29,16 +29,15 @@ RAG_USER_TEMPLATE = """【用户问题】
 
 @dataclass
 class RAGResponse:
-    """RAG 响应"""
+    """RAG 问答响应"""
 
-    answer: str
-    sources: list[dict] = field(default_factory=list)
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-    total_tokens: int = 0
-    # P3 新增：检索相关信息
-    rewritten_query: str = ""
-    retrieval_mode: str = "hybrid"  # "vector" / "hybrid"
+    answer: str                                          # LLM 生成的回答内容
+    sources: list[dict] = field(default_factory=list)    # 引用的来源列表（文件名、分数、片段索引）
+    prompt_tokens: int = 0                               # 输入消耗的 token 数
+    completion_tokens: int = 0                           # 输出消耗的 token 数
+    total_tokens: int = 0                                # 总消耗 token 数
+    rewritten_query: str = ""                            # Query 改写后的检索语句
+    retrieval_mode: str = "hybrid"                       # 检索模式："vector"(纯向量) / "hybrid"(混合检索)
 
 
 class RAGService:

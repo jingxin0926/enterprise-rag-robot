@@ -32,11 +32,11 @@ DEFAULT_COLLECTION = "knowledge_base"
 
 @dataclass
 class SearchResult:
-    """向量检索结果"""
+    """向量检索结果（单条）"""
 
-    content: str
-    score: float
-    metadata: dict = field(default_factory=dict)
+    content: str                                     # 检索到的文档片段内容
+    score: float                                     # 向量相似度分数（0-1，越高越相关）
+    metadata: dict = field(default_factory=dict)     # 元数据（来源文件名、片段索引、入库时间等）
 
 
 class QdrantStore:

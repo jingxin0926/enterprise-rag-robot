@@ -32,43 +32,43 @@ from app.prompts.loader import get_prompt_loader
 class EvalScore:
     """单项评测分数"""
 
-    metric: str          # 指标名称
-    score: int           # 1-5 分
-    reason: str          # 打分理由
-    error: str = ""      # 如果评测出错，记录原因
+    metric: str          # 评测指标名称（faithfulness/relevancy/context_precision）
+    score: int           # 评分（1-5分，5分最好）
+    reason: str          # 打分理由（LLM 给出的解释）
+    error: str = ""      # 评测异常信息（正常为空，出错时记录原因）
 
 
 @dataclass
 class EvalResult:
-    """完整评测结果"""
+    """单条问答的完整评测结果"""
 
-    question: str
-    context: str
-    answer: str
-    scores: list[EvalScore] = field(default_factory=list)
-    avg_score: float = 0.0
-    evaluated_at: str = ""
+    question: str                                        # 用户问题
+    context: str                                         # 检索到的参考资料
+    answer: str                                          # RAG 系统生成的回答
+    scores: list[EvalScore] = field(default_factory=list)  # 各维度评分列表
+    avg_score: float = 0.0                               # 三个维度的平均分
+    evaluated_at: str = ""                               # 评测时间（ISO格式）
 
     def __post_init__(self):
         self.evaluated_at = datetime.now().isoformat()
 
     def compute_avg(self) -> None:
-        """计算平均分"""
+        """计算各维度的平均分"""
         valid_scores = [s.score for s in self.scores if s.score > 0]
         self.avg_score = round(sum(valid_scores) / len(valid_scores), 2) if valid_scores else 0.0
 
 
 @dataclass
 class BatchEvalSummary:
-    """批量评测汇总"""
+    """批量评测汇总报告"""
 
-    total: int = 0
-    avg_faithfulness: float = 0.0
-    avg_relevancy: float = 0.0
-    avg_context_precision: float = 0.0
-    overall_avg: float = 0.0
-    results: list[EvalResult] = field(default_factory=list)
-    evaluated_at: str = ""
+    total: int = 0                                          # 评测总条数
+    avg_faithfulness: float = 0.0                           # 忠实度平均分（回答是否基于参考资料）
+    avg_relevancy: float = 0.0                              # 相关性平均分（回答是否切中问题）
+    avg_context_precision: float = 0.0                      # 上下文精确度平均分（检索结果是否相关）
+    overall_avg: float = 0.0                                # 总体平均分
+    results: list[EvalResult] = field(default_factory=list)  # 每条问答的详细评测结果
+    evaluated_at: str = ""                                  # 评测时间（ISO格式）
 
     def __post_init__(self):
         self.evaluated_at = datetime.now().isoformat()

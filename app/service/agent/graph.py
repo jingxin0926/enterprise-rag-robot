@@ -82,12 +82,12 @@ _TOOL_SCHEMAS = _build_tool_schemas()
 
 @dataclass
 class AgentResponse:
-    """Agent 响应"""
+    """Agent 智能体响应"""
 
-    answer: str
-    tool_calls_made: list[dict] = field(default_factory=list)
-    total_tokens: int = 0
-    rounds: int = 0
+    answer: str                                              # 最终回答内容
+    tool_calls_made: list[dict] = field(default_factory=list)  # 本次调用过的工具记录（工具名、参数、结果预览）
+    total_tokens: int = 0                                    # 总消耗 token 数
+    rounds: int = 0                                          # 经历了几轮工具调用循环
 
 
 def _execute_tool(tool_call: ChatCompletionMessageToolCall) -> str:

@@ -14,12 +14,12 @@ from loguru import logger
 
 @dataclass
 class RerankResult:
-    """重排结果"""
+    """重排序结果（单条）"""
 
-    content: str
-    score: float
-    metadata: dict
-    original_index: int  # 在输入列表中的原始位置
+    content: str           # 文档片段内容
+    score: float           # Cross-Encoder 相关性分数（越高越相关）
+    metadata: dict         # 元数据（来源文件名等）
+    original_index: int    # 在输入列表中的原始位置（用于溯源）
 
 
 class Reranker:

@@ -21,27 +21,21 @@ from app.core.exceptions import BizException, ErrorCode
 
 @dataclass
 class ChatMessage:
-    """聊天消息"""
+    """聊天消息（单条）"""
 
-    role: str  # system / user / assistant
-    content: str
+    role: str      # 角色：system(系统提示) / user(用户输入) / assistant(AI回答)
+    content: str   # 消息内容
 
 
 @dataclass
 class ChatResponse:
-    """
-    LLM 响应封装
+    """LLM 响应封装"""
 
-    包含内容和 token 用量，便于统计成本
-    """
-
-    content: str
-    # Token 用量
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-    total_tokens: int = 0
-    # 模型名称（便于记录是哪个模型消费的）
-    model: str = ""
+    content: str                 # AI 回答的文本内容
+    prompt_tokens: int = 0       # 输入消耗的 token 数（问题+上下文）
+    completion_tokens: int = 0   # 输出消耗的 token 数（AI回答）
+    total_tokens: int = 0        # 总消耗 token 数（用于计费）
+    model: str = ""              # 实际使用的模型名称
 
 
 class DeepSeekClient:

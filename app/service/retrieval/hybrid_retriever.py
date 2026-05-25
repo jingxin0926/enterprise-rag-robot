@@ -23,12 +23,12 @@ from app.infra.vector.qdrant_store import QdrantStore, SearchResult, get_qdrant_
 
 @dataclass
 class HybridResult:
-    """混合检索结果"""
+    """混合检索结果（单条）"""
 
-    content: str
-    score: float
-    metadata: dict = field(default_factory=dict)
-    source_type: str = ""  # "vector" / "bm25" / "hybrid"
+    content: str                                     # 检索到的文档片段内容
+    score: float                                     # 相关性分数（RRF融合后）
+    metadata: dict = field(default_factory=dict)     # 元数据（来源文件名、片段索引等）
+    source_type: str = ""                            # 检索来源："vector"(向量) / "bm25"(关键词) / "hybrid"(融合)
 
 
 class HybridRetriever:

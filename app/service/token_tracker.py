@@ -19,14 +19,14 @@ from loguru import logger
 class TokenRecord:
     """单次 token 消费记录"""
 
-    tenant_id: str
-    user_id: str
-    model: str
-    prompt_tokens: int
-    completion_tokens: int
-    total_tokens: int
-    endpoint: str  # 哪个接口消费的（chat/agent/rag）
-    timestamp: datetime = field(default_factory=datetime.now)
+    tenant_id: str           # 租户ID（多租户隔离）
+    user_id: str             # 用户ID
+    model: str               # 使用的模型名称（如 deepseek-chat）
+    prompt_tokens: int       # 输入消耗的 token 数
+    completion_tokens: int   # 输出消耗的 token 数
+    total_tokens: int        # 总消耗 token 数
+    endpoint: str            # 调用来源接口（chat/agent/rag）
+    timestamp: datetime = field(default_factory=datetime.now)  # 消费时间
 
 
 class TokenTracker:

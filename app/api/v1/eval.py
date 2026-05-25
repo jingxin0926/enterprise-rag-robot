@@ -48,8 +48,10 @@ async def eval_single(req: SingleEvalRequest):
         context=req.context,
         answer=req.answer,
     )
-    return R.ok(data={
+    return R.success(data={
         "question": result.question,
+        "context": result.context,
+        "answer": result.answer,
         "avg_score": result.avg_score,
         "scores": [
             {"metric": s.metric, "score": s.score, "reason": s.reason}
@@ -85,7 +87,7 @@ async def eval_rag(req: RAGEvalRequest):
     # 批量评测
     summary = await _eval_service.batch_evaluate(test_cases)
 
-    return R.ok(data={
+    return R.success(data={
         "total": summary.total,
         "avg_faithfulness": summary.avg_faithfulness,
         "avg_relevancy": summary.avg_relevancy,
