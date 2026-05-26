@@ -21,9 +21,13 @@ from app.core.security import TokenPayload
 from app.middleware.rate_limit import limiter
 from app.middleware.trace import get_trace_id
 from app.service.agent.graph import run_agent, run_agent_stream
+from app.service.memory import ConversationMemory
 from app.service.token_tracker import get_token_tracker
 
 router = APIRouter(prefix="/agent", tags=["智能助手"])
+
+# 记忆管理器（全局复用）
+_memory = ConversationMemory()
 
 
 class AgentRequest(BaseModel):
@@ -48,12 +52,22 @@ async def agent_chat(request: Request, req: AgentRequest, user: TokenPayload | N
     """
     session_id = req.session_id or uuid.uuid4().hex
 
+    # 获取历史上下文（含长期记忆摘要 + 近期对话）
+    history = await _memory.get_context(session_id)
+
     # 流式输出
     if req.stream:
         async def event_generator():
             try:
-                async for chunk in run_agent_stream(req.message):
+                full_answer = ""
+                async for chunk in run_agent_stream(req.message, history=history):
+                    full_answer += chunk
                     yield {"event": "message", "data": chunk}
+
+                # 流式结束后保存记忆
+                await _memory.add_message(session_id, "user", req.message)
+                await _memory.add_message(session_id, "assistant", full_answer)
+
                 yield {"event": "done", "data": f'{{"session_id": "{session_id}"}}'}
             except Exception as e:
                 logger.exception("[Agent SSE] 异常: {}", e)
@@ -62,7 +76,11 @@ async def agent_chat(request: Request, req: AgentRequest, user: TokenPayload | N
         return EventSourceResponse(event_generator())
 
     # 非流式输出
-    result = await run_agent(req.message)
+    result = await run_agent(req.message, history=history)
+
+    # 保存记忆
+    await _memory.add_message(session_id, "user", req.message)
+    await _memory.add_message(session_id, "assistant", result.answer)
 
     # Token 追踪（如果已认证）
     if user and result.total_tokens > 0:
@@ -71,10 +89,13 @@ async def agent_chat(request: Request, req: AgentRequest, user: TokenPayload | N
             tenant_id=user.tenant_id,
             user_id=user.user_id,
             model="deepseek-chat",
-            prompt_tokens=int(result.total_tokens * 0.7),  # 估算
+            prompt_tokens=int(result.total_tokens * 0.7),
             completion_tokens=int(result.total_tokens * 0.3),
             endpoint="agent",
         )
+
+    # 获取记忆状态
+    memory_stats = await _memory.get_stats(session_id)
 
     return R.success(
         data={
@@ -83,6 +104,7 @@ async def agent_chat(request: Request, req: AgentRequest, user: TokenPayload | N
             "tool_calls": result.tool_calls_made,
             "total_tokens": result.total_tokens,
             "rounds": result.rounds,
+            "memory": memory_stats,
         },
         trace_id=get_trace_id(),
     )
