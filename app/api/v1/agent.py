@@ -21,6 +21,7 @@ from app.core.security import TokenPayload
 from app.middleware.rate_limit import limiter
 from app.middleware.trace import get_trace_id
 from app.service.agent.graph import run_agent, run_agent_stream
+from app.service.agent.multi_agent import run_multi_agent
 from app.service.memory import ConversationMemory
 from app.service.token_tracker import get_token_tracker
 
@@ -101,6 +102,68 @@ async def agent_chat(request: Request, req: AgentRequest, user: TokenPayload | N
         data={
             "answer": result.answer,
             "session_id": session_id,
+            "tool_calls": result.tool_calls_made,
+            "total_tokens": result.total_tokens,
+            "rounds": result.rounds,
+            "memory": memory_stats,
+        },
+        trace_id=get_trace_id(),
+    )
+
+
+class MultiAgentRequest(BaseModel):
+    """Multi-Agent 请求"""
+
+    message: str = Field(..., min_length=1, max_length=4000, description="用户消息")
+    session_id: str | None = Field(default=None, description="会话 ID")
+
+
+@router.post("/multi", summary="Multi-Agent 智能对话")
+@limiter.limit("20/minute")
+async def multi_agent_chat(request: Request, req: MultiAgentRequest, user: TokenPayload | None = Depends(get_optional_user)):
+    """
+    Multi-Agent 协作对话
+
+    与单 Agent 的区别：
+    - 单 Agent：一个 Agent 判断所有事情
+    - Multi-Agent：Supervisor 先分析意图，路由到专家 Agent 处理
+
+    架构：Supervisor（路由）→ KnowledgeAgent / ChatAgent / DataAgent
+
+    返回值中包含 routed_to 字段，标识本次由哪个专家处理。
+    """
+    session_id = req.session_id or uuid.uuid4().hex
+
+    # 获取历史上下文
+    history = await _memory.get_context(session_id)
+
+    # Multi-Agent 执行
+    result = await run_multi_agent(req.message, history=history)
+
+    # 保存记忆
+    await _memory.add_message(session_id, "user", req.message)
+    await _memory.add_message(session_id, "assistant", result.answer)
+
+    # Token 追踪
+    if user and result.total_tokens > 0:
+        tracker = get_token_tracker()
+        tracker.record(
+            tenant_id=user.tenant_id,
+            user_id=user.user_id,
+            model="deepseek-chat",
+            prompt_tokens=int(result.total_tokens * 0.7),
+            completion_tokens=int(result.total_tokens * 0.3),
+            endpoint="multi_agent",
+        )
+
+    # 记忆状态
+    memory_stats = await _memory.get_stats(session_id)
+
+    return R.success(
+        data={
+            "answer": result.answer,
+            "session_id": session_id,
+            "routed_to": result.routed_to,
             "tool_calls": result.tool_calls_made,
             "total_tokens": result.total_tokens,
             "rounds": result.rounds,

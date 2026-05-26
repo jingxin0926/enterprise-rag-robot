@@ -23,6 +23,8 @@
 """
 
 import json
+from datetime import datetime
+from pathlib import Path
 from loguru import logger
 
 from app.core.config import settings
@@ -64,6 +66,8 @@ class ConversationMemory:
 
     # ------------------------------------------------------------------
     # 存储操作（Redis 优先，内存 fallback）
+    # 短期记忆：Redis（可过期）
+    # 长期记忆（摘要）：独立持久化存储（不跟随 Redis 过期）
     # ------------------------------------------------------------------
     async def _get_data(self, session_id: str) -> dict:
         """获取会话的完整记忆数据"""
@@ -72,16 +76,28 @@ class ConversationMemory:
             key = f"memory:{session_id}"
             raw = await redis.get(key)
             if raw:
-                return json.loads(raw)
+                data = json.loads(raw)
+                # 如果 Redis 里没有摘要，尝试从持久化层加载
+                if not data.get("summary"):
+                    data["summary"] = await self._load_summary(session_id)
+                return data
+            else:
+                # Redis 过期了，但长期记忆可能还在持久化层
+                summary = await self._load_summary(session_id)
+                return {
+                    "summary": summary,
+                    "messages": [],
+                    "total_turns": 0,
+                }
         else:
             if session_id in _memory_store:
                 return _memory_store[session_id]
 
-        # 初始结构
+        # 全新会话
         return {
-            "summary": "",           # 长期记忆（压缩摘要）
-            "messages": [],          # 短期记忆（近期对话原文）
-            "total_turns": 0,        # 历史总轮次（统计用）
+            "summary": "",
+            "messages": [],
+            "total_turns": 0,
         }
 
     async def _save_data(self, session_id: str, data: dict) -> None:
@@ -92,6 +108,34 @@ class ConversationMemory:
             await redis.set(key, json.dumps(data, ensure_ascii=False), ex=self._session_ttl)
         else:
             _memory_store[session_id] = data
+
+        # 如果有摘要，额外持久化一份（不受 Redis TTL 影响）
+        if data.get("summary"):
+            await self._persist_summary(session_id, data["summary"])
+
+    # ------------------------------------------------------------------
+    # 长期记忆持久化（摘要独立存储，不过期）
+    # 当前用本地文件实现，生产环境应替换为 MySQL/PostgreSQL
+    # ------------------------------------------------------------------
+    def _get_summary_path(self, session_id: str) -> Path:
+        """获取摘要文件路径"""
+        summary_dir = Path(__file__).resolve().parent.parent.parent / "data" / "memory"
+        summary_dir.mkdir(parents=True, exist_ok=True)
+        return summary_dir / f"{session_id}.json"
+
+    async def _persist_summary(self, session_id: str, summary: str) -> None:
+        """持久化保存摘要（不受 Redis 过期影响）"""
+        path = self._get_summary_path(session_id)
+        data = {"summary": summary, "updated_at": datetime.now().isoformat()}
+        path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+    async def _load_summary(self, session_id: str) -> str:
+        """从持久化层加载摘要"""
+        path = self._get_summary_path(session_id)
+        if path.exists():
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return data.get("summary", "")
+        return ""
 
     # ------------------------------------------------------------------
     # 核心方法
@@ -212,6 +256,7 @@ class ConversationMemory:
             data["summary"] = new_summary
             data["messages"] = to_keep
 
+            # 压缩后立刻持久化摘要（确保 Redis 过期也不丢）
             logger.info(
                 "[Memory] 对话压缩完成 | 压缩{}条 → 摘要{}字 | 保留近期{}条",
                 len(to_compress),
