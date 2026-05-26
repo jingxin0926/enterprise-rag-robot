@@ -30,11 +30,12 @@ class PromptLoader:
     - 从 Markdown 文件加载 Prompt 模板
     - 执行变量替换
     - 缓存已加载的模板（生产模式）
+    - 支持多租户 Prompt 定制（租户专属 → fallback 到默认）
 
     设计决策：
     - 用 .md 文件管理：支持 Git 版本追踪，方便协作和 Code Review
     - 用 {variable} 占位符：轻量无额外依赖，满足当前模板需求
-    - 后续可扩展为从 Redis/DB 加载（多租户场景下按租户加载不同 Prompt）
+    - 多租户：先查 prompts/tenants/{tenant_id}/ 目录，没有则用默认 prompts/
     """
 
     def __init__(self, prompts_dir: Path | None = None, cache_enabled: bool = True) -> None:
@@ -49,19 +50,32 @@ class PromptLoader:
         self._cache_enabled = cache_enabled
         self._cache: dict[str, str] = {}
 
-    def _read_file(self, name: str) -> str:
+    def _read_file(self, name: str, tenant_id: str | None = None) -> str:
         """
-        读取 Prompt 文件内容
+        读取 Prompt 文件内容（支持多租户）
+
+        查找顺序：
+        1. prompts/tenants/{tenant_id}/{name}.md（租户专属）
+        2. prompts/{name}.md（默认）
 
         Args:
             name: 文件名（不含 .md 后缀）
+            tenant_id: 租户ID（可选）
 
         Returns:
             文件内容字符串
 
         Raises:
-            FileNotFoundError: 文件不存在时抛出
+            FileNotFoundError: 默认文件也不存在时抛出
         """
+        # 先查租户专属目录
+        if tenant_id and tenant_id != "default":
+            tenant_path = self._dir / "tenants" / tenant_id / f"{name}.md"
+            if tenant_path.exists():
+                logger.debug("[PromptLoader] 使用租户专属 Prompt: tenant={} name={}", tenant_id, name)
+                return tenant_path.read_text(encoding="utf-8")
+
+        # fallback 到默认目录
         file_path = self._dir / f"{name}.md"
         if not file_path.exists():
             raise FileNotFoundError(
@@ -70,28 +84,32 @@ class PromptLoader:
             )
         return file_path.read_text(encoding="utf-8")
 
-    def load(self, name: str, **kwargs: str) -> str:
+    def load(self, name: str, tenant_id: str | None = None, **kwargs: str) -> str:
         """
-        加载并渲染 Prompt
+        加载并渲染 Prompt（支持多租户）
 
         Args:
             name: Prompt 名称（对应 prompts/ 目录下的文件名，不含 .md）
+            tenant_id: 租户ID（可选，传入则优先加载租户专属 Prompt）
             **kwargs: 模板变量，如 context="...", question="..."
 
         Returns:
             渲染后的 Prompt 文本
 
         使用示例：
-            loader.load("rag_system", context="文档内容...", question="怎么请假？")
+            loader.load("rag_system", tenant_id="company_a", context="文档内容...")
         """
+        # 缓存 key 需要包含 tenant_id
+        cache_key = f"{tenant_id or 'default'}:{name}"
+
         # 从缓存或文件读取模板
-        if self._cache_enabled and name in self._cache:
-            template = self._cache[name]
+        if self._cache_enabled and cache_key in self._cache:
+            template = self._cache[cache_key]
         else:
-            template = self._read_file(name)
+            template = self._read_file(name, tenant_id)
             if self._cache_enabled:
-                self._cache[name] = template
-                logger.debug("[PromptLoader] 已缓存 Prompt: {}", name)
+                self._cache[cache_key] = template
+                logger.debug("[PromptLoader] 已缓存 Prompt: {}", cache_key)
 
         # 变量替换
         if kwargs:

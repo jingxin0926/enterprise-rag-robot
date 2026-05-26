@@ -85,6 +85,10 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # 多租户识别（从 JWT 提取 tenant_id 注入上下文）
+    from app.middleware.tenant import TenantMiddleware
+    app.add_middleware(TenantMiddleware)
+
     # 链路追踪（最先注册 -> 最先执行 -> 全程贯穿）
     app.add_middleware(TraceMiddleware)
 

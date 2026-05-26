@@ -132,13 +132,29 @@ class RAGService:
 
     async def query(self, question: str) -> RAGResponse:
         """RAG 问答（非流式）"""
+        from app.infra.observability.langfuse_client import LLMTracer
+        import time
+
+        # 创建追踪
+        tracer = LLMTracer(trace_name="rag_query", metadata={"question": question})
+
         # 1. 检索
+        t0 = time.perf_counter()
         results, rewritten = await self._retrieve(question)
+        retrieval_ms = (time.perf_counter() - t0) * 1000
+
+        # 记录检索步骤到 Langfuse
+        tracer.log_retrieval(
+            query=rewritten,
+            results=[{"content": r.content[:100], "score": r.score} for r in results[:3]],
+            duration_ms=retrieval_ms,
+        )
 
         # 2. 组装上下文
         context, sources = self._build_context(results)
 
         if not context:
+            tracer.end()
             return RAGResponse(
                 answer="抱歉，知识库中暂未找到与您问题相关的内容。请尝试换个说法，或确认相关文档是否已上传。",
                 sources=[],
@@ -154,7 +170,23 @@ class RAGService:
         ]
 
         # 4. 调用 LLM
+        t1 = time.perf_counter()
         response = await self._llm.chat(messages)
+        generation_ms = (time.perf_counter() - t1) * 1000
+
+        # 记录 LLM 生成步骤到 Langfuse
+        tracer.log_generation(
+            model="deepseek-chat",
+            prompt=f"[system]{system_prompt[:200]}...\n[user]{user_content}",
+            completion=response.content[:500],
+            tokens={
+                "input": response.prompt_tokens,
+                "output": response.completion_tokens,
+                "total": response.total_tokens,
+            },
+            duration_ms=generation_ms,
+        )
+        tracer.end()
 
         logger.info(
             "[RAG-P3] 问答完成 | question='{}...' rewritten='{}...' hits={} tokens={}",
