@@ -1,0 +1,56 @@
+name: RAG 质量门禁
+
+# 触发条件：Prompt 文件修改或评测脚本修改时触发
+on:
+  push:
+    paths:
+      - 'app/prompts/*.md'
+      - 'scripts/ci_eval_gate.py'
+      - 'app/service/rag_service.py'
+      - 'app/service/retrieval/**'
+  pull_request:
+    paths:
+      - 'app/prompts/*.md'
+      - 'scripts/ci_eval_gate.py'
+
+jobs:
+  rag-quality-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 安装 uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: 安装依赖
+        run: uv sync
+
+      - name: 启动服务
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          APP_ENV: test
+          NO_PROXY: localhost,127.0.0.1
+          HF_ENDPOINT: https://hf-mirror.com
+        run: |
+          uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+          echo "等待服务启动..."
+          sleep 30
+          curl -f http://localhost:8000/api/v1/health || exit 1
+          echo "服务启动成功"
+
+      - name: 灌入测试数据
+        env:
+          NO_PROXY: localhost,127.0.0.1
+        run: uv run python scripts/seed_knowledge.py
+
+      - name: 执行 RAG 评测
+        env:
+          NO_PROXY: localhost,127.0.0.1
+          EVAL_BASE_URL: http://localhost:8000
+          EVAL_THRESHOLD: "3.5"
+        run: uv run python scripts/ci_eval_gate.py
