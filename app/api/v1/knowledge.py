@@ -10,15 +10,17 @@
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, File, UploadFile
+from fastapi import APIRouter, Depends, File, UploadFile
 from loguru import logger
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
+from app.api.deps import get_current_user
 from app.core.response import R
+from app.core.security import TokenPayload
+from app.infra.vector.qdrant_store import get_qdrant_store
 from app.middleware.trace import get_trace_id
 from app.service.document_service import DocumentService
-from app.infra.vector.qdrant_store import get_qdrant_store
 from app.service.rag_service import RAGService
 from app.service.retrieval.hybrid_retriever import get_hybrid_retriever
 
@@ -49,7 +51,7 @@ MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
 
 
 @router.post("/upload", summary="上传文档到知识库")
-async def upload_document(file: UploadFile = File(...)):
+async def upload_document(file: UploadFile = File(...), user: TokenPayload = Depends(get_current_user)):
     """
     上传文件到知识库
 
@@ -109,7 +111,7 @@ async def upload_document(file: UploadFile = File(...)):
 
 
 @router.post("/upload_text", summary="直接上传文本到知识库")
-async def upload_text(req: TextUploadRequest):
+async def upload_text(req: TextUploadRequest, user: TokenPayload = Depends(get_current_user)):
     """
     直接粘贴文本到知识库（不需要文件）
 
@@ -136,7 +138,7 @@ async def upload_text(req: TextUploadRequest):
 
 
 @router.post("/query", summary="知识库问答 (RAG)")
-async def query_knowledge(req: KnowledgeQueryRequest):
+async def query_knowledge(req: KnowledgeQueryRequest, user: TokenPayload = Depends(get_current_user)):
     """
     基于知识库的智能问答
 

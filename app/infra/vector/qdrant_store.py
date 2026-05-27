@@ -16,7 +16,7 @@ from loguru import logger
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
-from app.core.config import settings, PROJECT_ROOT
+from app.core.config import PROJECT_ROOT
 
 # 本地持久化目录
 QDRANT_STORAGE_PATH = str(PROJECT_ROOT / "data" / "qdrant_storage")
@@ -119,7 +119,7 @@ class QdrantStore:
         # 构造 points
         ids = [uuid.uuid4().hex for _ in texts]
         points = []
-        for i, (text, embedding, doc_id) in enumerate(zip(texts, embeddings, ids)):
+        for i, (text, embedding, doc_id) in enumerate(zip(texts, embeddings, ids, strict=True)):
             payload = {"content": text}
             if metadatas and i < len(metadatas):
                 payload.update(metadatas[i])
@@ -155,7 +155,6 @@ class QdrantStore:
         query_embedding = self._get_embeddings([query])[0]
 
         # 执行检索（qdrant-client 1.12+ 使用 query_points）
-        from qdrant_client.models import ScoredPoint
         results = self._client.query_points(
             collection_name=self._collection_name,
             query=query_embedding,

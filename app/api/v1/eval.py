@@ -7,7 +7,6 @@ RAG 评测接口
 """
 
 from fastapi import APIRouter
-from loguru import logger
 from pydantic import BaseModel, Field
 
 from app.core.response import R

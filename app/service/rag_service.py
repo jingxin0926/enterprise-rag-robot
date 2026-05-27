@@ -132,11 +132,25 @@ class RAGService:
 
     async def query(self, question: str) -> RAGResponse:
         """RAG 问答（非流式）"""
-        from app.infra.observability.langfuse_client import LLMTracer
         import time
+
+        from app.infra.observability.langfuse_client import LLMTracer
+        from app.service.semantic_cache import get_semantic_cache
 
         # 创建追踪
         tracer = LLMTracer(trace_name="rag_query", metadata={"question": question})
+
+        # 0. 先查语义缓存（命中则直接返回，不调 LLM）
+        cache = get_semantic_cache()
+        cache_hit = cache.lookup(question)
+        if cache_hit:
+            tracer.end()
+            return RAGResponse(
+                answer=cache_hit.answer,
+                sources=[{"source": "semantic_cache", "score": cache_hit.score}],
+                rewritten_query="",
+                retrieval_mode="cache_hit",
+            )
 
         # 1. 检索
         t0 = time.perf_counter()
@@ -187,6 +201,9 @@ class RAGService:
             duration_ms=generation_ms,
         )
         tracer.end()
+
+        # 存入语义缓存（下次相似问题直接命中）
+        cache.store(question, response.content)
 
         logger.info(
             "[RAG-P3] 问答完成 | question='{}...' rewritten='{}...' hits={} tokens={}",

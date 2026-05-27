@@ -8,10 +8,11 @@ BM25 全文检索（基于 jieba 中文分词）
 4. 后续上生产可替换为 ES，接口一致
 """
 
-import jieba
 from dataclasses import dataclass, field
-from rank_bm25 import BM25Okapi
+
+import jieba
 from loguru import logger
+from rank_bm25 import BM25Okapi
 
 
 @dataclass

@@ -26,7 +26,6 @@ CI/CD 质量门禁脚本
 
 import os
 import sys
-import json
 
 import httpx
 

@@ -9,6 +9,7 @@ Rerank 重排序
 """
 
 from dataclasses import dataclass
+
 from loguru import logger
 
 
@@ -67,9 +68,7 @@ class Reranker:
 
         model = self._get_model()
 
-        # 构造 (query, doc) 对
-        pairs = [(query, doc) for doc in documents]
-
+        # 构造 (query, doc) 对（fastembed rerank 内部处理）
         # 计算相关性分数
         scores = list(model.rerank(query, documents))
 

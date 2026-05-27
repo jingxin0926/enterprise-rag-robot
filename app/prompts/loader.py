@@ -14,8 +14,9 @@ Prompt 加载器
     prompt = loader.load("rag_system", context="参考资料...", question="年假怎么请？")
 """
 
-from pathlib import Path
 from functools import lru_cache
+from pathlib import Path
+
 from loguru import logger
 
 # Prompt 文件所在目录

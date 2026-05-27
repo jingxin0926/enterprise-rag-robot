@@ -13,7 +13,7 @@ from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 
 from loguru import logger
-from openai import AsyncOpenAI, APITimeoutError, RateLimitError, APIError
+from openai import APIError, APITimeoutError, AsyncOpenAI, RateLimitError
 
 from app.core.config import settings
 from app.core.exceptions import BizException, ErrorCode

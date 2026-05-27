@@ -1,4 +1,4 @@
-"""
+r"""
 知识库种子数据灌入脚本
 
 批量上传模拟企业文档到知识库，用于测试 RAG 检索和评测。
@@ -9,8 +9,9 @@
     uv run python scripts/seed_knowledge.py
 """
 
-import httpx
 import time
+
+import httpx
 
 BASE_URL = "http://localhost:8000/api/v1/knowledge/upload_text"
 
@@ -795,8 +796,8 @@ def main():
 
     print("-" * 50)
     print(f"📊 上传完成！成功: {success}, 失败: {failed}")
-    print(f"💡 现在可以测试 RAG 问答了：")
-    print(f'   curl -X POST http://localhost:8000/api/v1/knowledge/query -H "Content-Type: application/json" -d "{{\\"question\\": \\"年假怎么申请？\\"}}"')
+    print("💡 现在可以测试 RAG 问答了：")
+    print('   curl -X POST http://localhost:8000/api/v1/knowledge/query -H "Content-Type: application/json" -d "{\\"question\\": \\"年假怎么申请？\\"}"')
 
 
 if __name__ == "__main__":

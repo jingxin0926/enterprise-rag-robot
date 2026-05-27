@@ -8,9 +8,9 @@ Token 用量追踪与计费
 4. 为后续的配额管理、账单系统做基础
 """
 
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
-from collections import defaultdict
 
 from loguru import logger
 

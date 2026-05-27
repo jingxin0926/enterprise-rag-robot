@@ -10,7 +10,6 @@ from datetime import datetime
 from loguru import logger
 
 from app.infra.vector.qdrant_store import get_qdrant_store
-from app.service.retrieval.bm25_retriever import BM25Retriever
 
 
 def search_knowledge_base(query: str) -> str:

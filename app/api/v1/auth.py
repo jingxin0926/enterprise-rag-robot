@@ -17,12 +17,12 @@ from app.api.deps import get_current_user
 from app.core.exceptions import BizException, ErrorCode
 from app.core.response import R
 from app.core.security import (
+    ACCESS_TOKEN_EXPIRE_HOURS,
     TokenPayload,
     TokenResponse,
     create_access_token,
     hash_password,
     verify_password,
-    ACCESS_TOKEN_EXPIRE_HOURS,
 )
 from app.middleware.trace import get_trace_id
 

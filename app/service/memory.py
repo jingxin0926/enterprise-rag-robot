@@ -25,13 +25,12 @@
 import json
 from datetime import datetime
 from pathlib import Path
+
 from loguru import logger
 
-from app.core.config import settings
 from app.infra.cache.redis_client import get_redis
 from app.infra.llm.deepseek_client import ChatMessage, get_deepseek_client
 from app.prompts.loader import get_prompt_loader
-
 
 # 内存 fallback 存储
 _memory_store: dict[str, dict] = {}

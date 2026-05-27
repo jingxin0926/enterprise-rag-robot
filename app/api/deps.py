@@ -4,10 +4,9 @@ API 依赖注入
 提供公共的依赖：认证、租户、限流等
 """
 
-from fastapi import Depends, Header, Request
-from loguru import logger
+from fastapi import Depends, Header
 
-from app.core.exceptions import UnauthorizedException, BizException, ErrorCode
+from app.core.exceptions import UnauthorizedException
 from app.core.security import TokenPayload, verify_token
 
 

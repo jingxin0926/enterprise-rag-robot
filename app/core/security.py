@@ -8,7 +8,7 @@
 4. Token 过期自动失效
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from loguru import logger
@@ -20,8 +20,8 @@ from app.core.config import settings
 # ============================================================
 # 配置常量
 # ============================================================
-# JWT 密钥（生产环境从环境变量读取）
-JWT_SECRET_KEY = "smart-qa-system-jwt-secret-change-in-production"
+# JWT 密钥（从环境变量读取，未配置时报错提醒）
+JWT_SECRET_KEY = settings.jwt_secret_key
 JWT_ALGORITHM = "HS256"
 # Token 过期时间（小时）
 ACCESS_TOKEN_EXPIRE_HOURS = 24
@@ -76,7 +76,7 @@ def create_access_token(
     Returns:
         JWT token 字符串
     """
-    expire = datetime.now(timezone.utc) + timedelta(hours=expires_hours)
+    expire = datetime.now(UTC) + timedelta(hours=expires_hours)
     payload = {
         "user_id": user_id,
         "username": username,

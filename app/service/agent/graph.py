@@ -233,7 +233,7 @@ async def run_agent_stream(
     messages.append({"role": "user", "content": user_message})
 
     # 先做非流式的工具调用循环
-    for round_num in range(MAX_TOOL_ROUNDS):
+    for _round_num in range(MAX_TOOL_ROUNDS):
         response = await client.chat.completions.create(
             model=settings.deepseek_model,
             messages=messages,

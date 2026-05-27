@@ -36,7 +36,7 @@ from openai import AsyncOpenAI
 from app.core.config import settings
 from app.infra.llm.deepseek_client import ChatMessage, get_deepseek_client
 from app.prompts.loader import get_prompt_loader
-from app.service.agent.tools import AVAILABLE_TOOLS, search_knowledge_base, get_current_time, calculator
+from app.service.agent.tools import AVAILABLE_TOOLS, calculator, get_current_time, search_knowledge_base
 
 
 @dataclass

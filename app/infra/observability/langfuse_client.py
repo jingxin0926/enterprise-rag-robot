@@ -22,7 +22,6 @@ Langfuse 是什么：
 """
 
 import os
-from functools import lru_cache
 
 from loguru import logger
 

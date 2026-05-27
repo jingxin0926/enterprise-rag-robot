@@ -16,9 +16,9 @@ from dataclasses import dataclass, field
 
 from loguru import logger
 
-from app.service.retrieval.bm25_retriever import BM25Retriever, BM25Result
-from app.service.retrieval.reranker import Reranker
 from app.infra.vector.qdrant_store import QdrantStore, SearchResult, get_qdrant_store
+from app.service.retrieval.bm25_retriever import BM25Result, BM25Retriever
+from app.service.retrieval.reranker import Reranker
 
 
 @dataclass

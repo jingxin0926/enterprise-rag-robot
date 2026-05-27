@@ -96,9 +96,10 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
 
     # ---------- 限流 ----------
-    from app.middleware.rate_limit import limiter
     from slowapi import _rate_limit_exceeded_handler
     from slowapi.errors import RateLimitExceeded
+
+    from app.middleware.rate_limit import limiter
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 

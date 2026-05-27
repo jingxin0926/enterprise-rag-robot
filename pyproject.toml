@@ -107,6 +107,8 @@ select = [
 ignore = [
     "E501",  # 行过长（由 formatter 处理）
     "B008",  # FastAPI Depends() 在默认参数中是常见模式
+    "N818",  # Exception 命名不强制 Error 后缀（BizException 是约定俗成）
+    "UP042", # StrEnum 兼容性考虑，保留 str + Enum 写法
 ]
 
 [tool.ruff.format]
