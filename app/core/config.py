@@ -90,6 +90,10 @@ class AppSettings(BaseSettings):
         default="please-change-this-secret-in-env",
         description="JWT 签名密钥（必须通过 .env 配置，禁止使用默认值上线）",
     )
+    admin_init_password: str = Field(
+        default="please-change-this-password-in-env",
+        description="初始管理员密码（必须通过 .env 配置，禁止使用默认值上线）",
+    )
 
     # ============================================================
     # 会话配置
@@ -134,6 +138,14 @@ def get_settings() -> AppSettings:
             raise RuntimeError(
                 "🚨 JWT_SECRET_KEY 未配置！生产环境禁止使用默认密钥，"
                 "请在 .env 或环境变量中设置一个强随机字符串。"
+            )
+
+    # Fail-fast：生产环境禁止使用默认管理员密码
+    if _settings.admin_init_password == "please-change-this-password-in-env":
+        if _settings.is_prod:
+            raise RuntimeError(
+                "🚨 ADMIN_INIT_PASSWORD 未配置！生产环境禁止使用默认密码，"
+                "请在 .env 或环境变量中设置一个强密码。"
             )
 
     return _settings

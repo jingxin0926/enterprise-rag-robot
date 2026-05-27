@@ -6,14 +6,15 @@
 2. GET  /api/v1/auth/me     — 获取当前用户信息
 
 说明：
-P5 阶段用内存模拟用户数据（无数据库），生产接 MySQL 即可。
-核心是验证 JWT 流程跑通。
+当前用内存模拟用户数据（无数据库），后续接 MySQL 用户表即可。
+初始管理员密码从环境变量 ADMIN_INIT_PASSWORD 读取，避免硬编码。
 """
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from app.api.deps import get_current_user
+from app.core.config import settings
 from app.core.exceptions import BizException, ErrorCode
 from app.core.response import R
 from app.core.security import (
@@ -30,31 +31,38 @@ router = APIRouter(prefix="/auth", tags=["认证"])
 
 
 # ============================================================
-# 用户数据（当前内存存储，生产环境接 MySQL）
+# 用户数据（内存存储，生产环境接 MySQL）
+# 初始密码从环境变量读取，不在代码中硬编码
 # ============================================================
-MOCK_USERS = {
-    "admin": {
-        "user_id": "u_001",
-        "username": "admin",
-        "password_hash": hash_password("admin123"),
-        "tenant_id": "t_default",
-        "role": "admin",
-    },
-    "user1": {
-        "user_id": "u_002",
-        "username": "user1",
-        "password_hash": hash_password("user123"),
-        "tenant_id": "t_default",
-        "role": "user",
-    },
-    "demo": {
-        "user_id": "u_003",
-        "username": "demo",
-        "password_hash": hash_password("demo123"),
-        "tenant_id": "t_demo",  # 不同租户
-        "role": "user",
-    },
-}
+def _build_users() -> dict[str, dict]:
+    """
+    构建用户表
+
+    admin 密码来源：环境变量 ADMIN_INIT_PASSWORD（必须配置）
+    生产环境如果漏配，启动时 fail-fast 拦截（见 config.py）
+    """
+    admin_pwd = settings.admin_init_password
+    return {
+        "admin": {
+            "user_id": "u_001",
+            "username": "admin",
+            "password_hash": hash_password(admin_pwd),
+            "tenant_id": "t_default",
+            "role": "admin",
+        },
+    }
+
+
+# 延迟初始化（等 settings 加载完毕）
+_users: dict[str, dict] | None = None
+
+
+def _get_users() -> dict[str, dict]:
+    """获取用户表（懒加载单例）"""
+    global _users
+    if _users is None:
+        _users = _build_users()
+    return _users
 
 
 # ============================================================
@@ -74,13 +82,9 @@ class LoginRequest(BaseModel):
 async def login(req: LoginRequest):
     """
     用户登录，返回 JWT Token
-
-    测试账号：
-    - admin / admin123（管理员，租户 t_default）
-    - user1 / user123（普通用户，租户 t_default）
-    - demo / demo123（用户，租户 t_demo）
     """
-    user = MOCK_USERS.get(req.username)
+    users = _get_users()
+    user = users.get(req.username)
     if not user:
         raise BizException(ErrorCode.UNAUTHORIZED, "用户名或密码错误")
 

@@ -94,6 +94,10 @@ async def upload_document(file: UploadFile = File(...), user: TokenPayload = Dep
         hybrid = get_hybrid_retriever()
         hybrid.add_documents(texts, metadatas)
 
+        # 7. 清除语义缓存（知识库已更新，旧缓存可能返回过期答案）
+        from app.service.semantic_cache import get_semantic_cache
+        get_semantic_cache().clear()
+
         logger.info("[Knowledge] 文档入库成功 | file={} chunks={}", filename, len(chunks))
 
         return R.success(
@@ -129,6 +133,10 @@ async def upload_text(req: TextUploadRequest, user: TokenPayload = Depends(get_c
     # 同步到 BM25 索引
     hybrid = get_hybrid_retriever()
     hybrid.add_documents(texts, metadatas)
+
+    # 清除语义缓存（知识库已更新，旧缓存可能返回过期答案）
+    from app.service.semantic_cache import get_semantic_cache
+    get_semantic_cache().clear()
 
     return R.success(
         data={"source": req.source_name, "chunks_count": len(chunks)},
