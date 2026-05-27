@@ -15,11 +15,13 @@ Prompt 在线管理接口
 
 from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from app.api.deps import get_current_user
 from app.core.response import R
+from app.core.security import TokenPayload
 from app.middleware.trace import get_trace_id
 from app.prompts.loader import get_prompt_loader
 
@@ -36,7 +38,7 @@ class PromptUpdateRequest(BaseModel):
 
 
 @router.get("", summary="列出所有 Prompt")
-async def list_prompts():
+async def list_prompts(user: TokenPayload = Depends(get_current_user)):
     """
     返回所有可用的 Prompt 文件列表
 
@@ -51,7 +53,7 @@ async def list_prompts():
 
 
 @router.get("/{name}", summary="查看 Prompt 内容")
-async def get_prompt(name: str):
+async def get_prompt(name: str, user: TokenPayload = Depends(get_current_user)):
     """
     查看某个 Prompt 的完整内容
 
@@ -70,7 +72,7 @@ async def get_prompt(name: str):
 
 
 @router.put("/{name}", summary="编辑 Prompt 内容")
-async def update_prompt(name: str, req: PromptUpdateRequest):
+async def update_prompt(name: str, req: PromptUpdateRequest, user: TokenPayload = Depends(get_current_user)):
     """
     在线编辑 Prompt 内容
 
@@ -101,7 +103,7 @@ async def update_prompt(name: str, req: PromptUpdateRequest):
 
 
 @router.post("/reload", summary="刷新 Prompt 缓存")
-async def reload_prompts(name: str | None = None):
+async def reload_prompts(name: str | None = None, user: TokenPayload = Depends(get_current_user)):
     """
     手动刷新 Prompt 缓存
 

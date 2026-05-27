@@ -2,7 +2,7 @@
 DeepSeek LLM 客户端
 
 设计要点：
-1. 基于 openai SDK（DeepSeek 完全兼容 OpenAI 协议），零额外学习成本
+1. 基于 openai SDK（DeepSeek 完全兼容 OpenAI 协议），接入成本低
 2. 支持同步和异步、普通输出和流式输出
 3. 封装 token 用量统计，为后续计费做基础
 4. 统一异常处理，将 OpenAI SDK 异常转为 BizException

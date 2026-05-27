@@ -30,7 +30,7 @@ router = APIRouter(prefix="/auth", tags=["认证"])
 
 
 # ============================================================
-# 模拟用户数据（P5 演示，后续接 MySQL）
+# 用户数据（当前内存存储，生产环境接 MySQL）
 # ============================================================
 MOCK_USERS = {
     "admin": {
@@ -78,7 +78,7 @@ async def login(req: LoginRequest):
     测试账号：
     - admin / admin123（管理员，租户 t_default）
     - user1 / user123（普通用户，租户 t_default）
-    - demo / demo123（演示用户，租户 t_demo）
+    - demo / demo123（用户，租户 t_demo）
     """
     user = MOCK_USERS.get(req.username)
     if not user:

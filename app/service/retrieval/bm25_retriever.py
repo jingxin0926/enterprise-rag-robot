@@ -5,7 +5,9 @@ BM25 全文检索（基于 jieba 中文分词）
 1. 纯内存实现，无需 Elasticsearch（开发阶段轻量）
 2. 使用 jieba 分词（中文 BM25 必须先分词）
 3. 索引与 Qdrant 数据同步（共享相同的 chunks）
-4. 后续上生产可替换为 ES，接口一致
+4. 多租户隔离：每个租户维护独立的 BM25 索引
+5. 启动重建：服务重启后从 Qdrant 自动恢复索引
+6. 后续上生产可替换为 ES，接口一致
 """
 
 from dataclasses import dataclass, field
@@ -68,6 +70,20 @@ class BM25Retriever:
         self._bm25 = BM25Okapi(self._tokenized_corpus)
 
         logger.info("[BM25] 索引更新 | 文档总数={}", len(self._documents))
+
+    def rebuild_from_data(self, texts: list[str], metadatas: list[dict] | None = None) -> None:
+        """
+        从已有数据重建索引（启动恢复专用）
+
+        与 add_documents 不同：先清空再重建，不追加
+        """
+        self._documents = []
+        self._metadatas = []
+        self._tokenized_corpus = []
+        self._bm25 = None
+
+        if texts:
+            self.add_documents(texts, metadatas)
 
     def search(self, query: str, top_k: int = 5) -> list[BM25Result]:
         """

@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from loguru import logger
 
 from app.core.config import settings
+from app.core.tenant import get_tenant_cache_prefix
 from app.infra.cache.redis_client import get_redis
 from app.infra.llm.deepseek_client import ChatMessage, ChatResponse, get_deepseek_client
 from app.prompts.loader import get_prompt_loader
@@ -56,8 +57,9 @@ class ChatService:
         优先从 Redis 获取，fallback 到内存
         """
         redis = await get_redis()
+        prefix = get_tenant_cache_prefix()
         if redis:
-            key = f"chat:history:{session_id}"
+            key = f"{prefix}:chat:history:{session_id}"
             raw = await redis.get(key)
             if raw:
                 return json.loads(raw)
@@ -78,8 +80,9 @@ class ChatService:
             history = history[-max_messages:]
 
         redis = await get_redis()
+        prefix = get_tenant_cache_prefix()
         if redis:
-            key = f"chat:history:{session_id}"
+            key = f"{prefix}:chat:history:{session_id}"
             await redis.set(key, json.dumps(history, ensure_ascii=False), ex=settings.chat_session_ttl)
         else:
             _memory_store[session_id] = history
@@ -175,8 +178,9 @@ class ChatService:
     async def clear_history(self, session_id: str) -> None:
         """清空会话历史"""
         redis = await get_redis()
+        prefix = get_tenant_cache_prefix()
         if redis:
-            await redis.delete(f"chat:history:{session_id}")
+            await redis.delete(f"{prefix}:chat:history:{session_id}")
         else:
             _memory_store.pop(session_id, None)
         logger.info("[ChatService] 清空会话 | session={}", session_id[:8])

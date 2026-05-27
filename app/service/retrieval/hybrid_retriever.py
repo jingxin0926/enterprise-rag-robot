@@ -45,11 +45,13 @@ class HybridRetriever:
 
     def __init__(
         self,
+        collection_name: str | None = None,
         use_rerank: bool = False,  # 暂时默认关闭，后续引入专用 rerank 模型
         vector_weight: float = 0.6,  # 向量检索权重（融合时）
         bm25_weight: float = 0.4,  # BM25 权重
     ) -> None:
-        self._vector_store: QdrantStore = get_qdrant_store()
+        self._collection_name = collection_name
+        self._vector_store: QdrantStore = get_qdrant_store(collection_name)
         self._bm25 = BM25Retriever()
         self._reranker = Reranker() if use_rerank else None
         self._vector_weight = vector_weight
@@ -193,13 +195,18 @@ class HybridRetriever:
         return results
 
 
-# 全局单例
-_hybrid_retriever: HybridRetriever | None = None
+# 按租户缓存实例（每个租户独立的混合检索器）
+_hybrid_retrievers: dict[str, HybridRetriever] = {}
 
 
-def get_hybrid_retriever() -> HybridRetriever:
-    """获取全局混合检索器"""
-    global _hybrid_retriever
-    if _hybrid_retriever is None:
-        _hybrid_retriever = HybridRetriever()
-    return _hybrid_retriever
+def get_hybrid_retriever(collection_name: str | None = None) -> HybridRetriever:
+    """
+    获取混合检索器实例（按租户隔离）
+
+    不传 collection_name 时，自动使用当前请求的租户 collection。
+    """
+    from app.core.tenant import get_tenant_collection_name
+    name = collection_name or get_tenant_collection_name()
+    if name not in _hybrid_retrievers:
+        _hybrid_retrievers[name] = HybridRetriever(collection_name=name)
+    return _hybrid_retrievers[name]

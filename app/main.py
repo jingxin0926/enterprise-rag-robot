@@ -41,7 +41,9 @@ async def lifespan(app: FastAPI):
     from app.infra.cache.redis_client import get_redis
     await get_redis()
 
-    # TODO P2: 初始化向量库连接
+    # BM25 索引重建：从 Qdrant 恢复内存索引（解决重启后混合检索退化问题）
+    from app.service.retrieval.bm25_rebuild import rebuild_bm25_from_qdrant
+    await rebuild_bm25_from_qdrant()
 
     logger.info("✅ 应用启动完成，监听端口 {}", settings.app_port)
 

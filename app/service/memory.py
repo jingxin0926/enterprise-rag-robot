@@ -28,6 +28,7 @@ from pathlib import Path
 
 from loguru import logger
 
+from app.core.tenant import get_current_tenant, get_tenant_cache_prefix
 from app.infra.cache.redis_client import get_redis
 from app.infra.llm.deepseek_client import ChatMessage, get_deepseek_client
 from app.prompts.loader import get_prompt_loader
@@ -71,8 +72,9 @@ class ConversationMemory:
     async def _get_data(self, session_id: str) -> dict:
         """获取会话的完整记忆数据"""
         redis = await get_redis()
+        prefix = get_tenant_cache_prefix()
         if redis:
-            key = f"memory:{session_id}"
+            key = f"{prefix}:memory:{session_id}"
             raw = await redis.get(key)
             if raw:
                 data = json.loads(raw)
@@ -102,8 +104,9 @@ class ConversationMemory:
     async def _save_data(self, session_id: str, data: dict) -> None:
         """保存会话记忆数据"""
         redis = await get_redis()
+        prefix = get_tenant_cache_prefix()
         if redis:
-            key = f"memory:{session_id}"
+            key = f"{prefix}:memory:{session_id}"
             await redis.set(key, json.dumps(data, ensure_ascii=False), ex=self._session_ttl)
         else:
             _memory_store[session_id] = data
@@ -117,8 +120,9 @@ class ConversationMemory:
     # 当前用本地文件实现，生产环境应替换为 MySQL/PostgreSQL
     # ------------------------------------------------------------------
     def _get_summary_path(self, session_id: str) -> Path:
-        """获取摘要文件路径"""
-        summary_dir = Path(__file__).resolve().parent.parent.parent / "data" / "memory"
+        """获取摘要文件路径（按租户隔离目录）"""
+        tenant_id = get_current_tenant()
+        summary_dir = Path(__file__).resolve().parent.parent.parent / "data" / "memory" / tenant_id
         summary_dir.mkdir(parents=True, exist_ok=True)
         return summary_dir / f"{session_id}.json"
 
@@ -205,8 +209,9 @@ class ConversationMemory:
     async def clear(self, session_id: str) -> None:
         """清空会话记忆"""
         redis = await get_redis()
+        prefix = get_tenant_cache_prefix()
         if redis:
-            await redis.delete(f"memory:{session_id}")
+            await redis.delete(f"{prefix}:memory:{session_id}")
         else:
             _memory_store.pop(session_id, None)
         logger.info("[Memory] 会话记忆已清空 | session={}", session_id[:8])

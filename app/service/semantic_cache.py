@@ -14,6 +14,10 @@
     3. 相似度 ≥ 阈值（如 0.92）→ 命中缓存，直接返回历史答案
     4. 相似度 < 阈值 → 未命中，正常调 LLM，然后把结果存入缓存
 
+多租户隔离：
+    每个租户使用独立的 Qdrant collection（semantic_cache_{tenant_id}），
+    互不干扰。
+
 效果：
     - Token 成本降低 30-60%（高频重复问题多的场景）
     - 响应延迟从 2-3 秒降到 50ms 以内（命中时）
@@ -28,10 +32,10 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
 from app.core.config import PROJECT_ROOT
+from app.core.tenant import get_current_tenant
 
 # 缓存向量库配置（独立于知识库，避免互相干扰）
 _CACHE_STORAGE_PATH = str(PROJECT_ROOT / "data" / "semantic_cache")
-_CACHE_COLLECTION = "semantic_cache"
 _EMBEDDING_DIM = 512  # BGE-small-zh-v1.5 的维度
 
 
@@ -66,25 +70,40 @@ class SemanticCache:
         self,
         similarity_threshold: float = 0.92,  # 相似度阈值（越高越严格）
         max_cache_size: int = 1000,           # 最大缓存条数
+        tenant_id: str | None = None,         # 指定租户（None时自动获取当前请求租户）
     ) -> None:
         self._threshold = similarity_threshold
         self._max_size = max_cache_size
-        self._client = None
+        self._tenant_id = tenant_id
+        self._clients: dict[str, QdrantClient] = {}
         self._embedding_model = None
 
-    def _ensure_client(self) -> QdrantClient:
-        """懒加载 Qdrant 客户端（缓存专用）"""
-        if self._client is None:
-            self._client = QdrantClient(path=_CACHE_STORAGE_PATH)
+    def _get_collection_name(self) -> str:
+        """获取当前租户对应的缓存 collection 名"""
+        tid = self._tenant_id or get_current_tenant()
+        if tid == "default":
+            return "semantic_cache"
+        return f"semantic_cache_{tid}"
+
+    def _ensure_client(self) -> tuple[QdrantClient, str]:
+        """懒加载 Qdrant 客户端（按租户隔离 collection）"""
+        collection_name = self._get_collection_name()
+
+        if collection_name not in self._clients:
+            from pathlib import Path
+            Path(_CACHE_STORAGE_PATH).mkdir(parents=True, exist_ok=True)
+            client = QdrantClient(path=_CACHE_STORAGE_PATH)
             # 确保 collection 存在
-            collections = [c.name for c in self._client.get_collections().collections]
-            if _CACHE_COLLECTION not in collections:
-                self._client.create_collection(
-                    collection_name=_CACHE_COLLECTION,
+            collections = [c.name for c in client.get_collections().collections]
+            if collection_name not in collections:
+                client.create_collection(
+                    collection_name=collection_name,
                     vectors_config=VectorParams(size=_EMBEDDING_DIM, distance=Distance.COSINE),
                 )
-                logger.info("[SemanticCache] 创建缓存 collection")
-        return self._client
+                logger.info("[SemanticCache] 创建缓存 collection | name={}", collection_name)
+            self._clients[collection_name] = client
+
+        return self._clients[collection_name], collection_name
 
     def _get_embedding_model(self):
         """懒加载 embedding 模型"""
@@ -111,11 +130,11 @@ class SemanticCache:
             CacheHit 如果命中，None 如果未命中
         """
         try:
-            client = self._ensure_client()
+            client, collection_name = self._ensure_client()
             query_vector = self._embed(question)
 
             results = client.search(
-                collection_name=_CACHE_COLLECTION,
+                collection_name=collection_name,
                 query_vector=query_vector,
                 limit=1,
                 score_threshold=self._threshold,
@@ -154,7 +173,7 @@ class SemanticCache:
             answer: LLM 生成的回答
         """
         try:
-            client = self._ensure_client()
+            client, collection_name = self._ensure_client()
             vector = self._embed(question)
 
             # 生成唯一ID（基于时间戳）
@@ -171,7 +190,7 @@ class SemanticCache:
                 },
             )
 
-            client.upsert(collection_name=_CACHE_COLLECTION, points=[point])
+            client.upsert(collection_name=collection_name, points=[point])
 
             logger.info(
                 "[SemanticCache] 已缓存 | question='{}...' answer_len={}",
@@ -185,9 +204,10 @@ class SemanticCache:
     def get_stats(self) -> dict:
         """获取缓存统计信息"""
         try:
-            client = self._ensure_client()
-            info = client.get_collection(_CACHE_COLLECTION)
+            client, collection_name = self._ensure_client()
+            info = client.get_collection(collection_name)
             return {
+                "collection": collection_name,
                 "total_cached": info.points_count,
                 "threshold": self._threshold,
                 "max_size": self._max_size,
@@ -196,15 +216,15 @@ class SemanticCache:
             return {"total_cached": 0, "threshold": self._threshold}
 
     def clear(self) -> None:
-        """清空缓存"""
+        """清空当前租户的缓存"""
         try:
-            client = self._ensure_client()
-            client.delete_collection(_CACHE_COLLECTION)
+            client, collection_name = self._ensure_client()
+            client.delete_collection(collection_name)
             client.create_collection(
-                collection_name=_CACHE_COLLECTION,
+                collection_name=collection_name,
                 vectors_config=VectorParams(size=_EMBEDDING_DIM, distance=Distance.COSINE),
             )
-            logger.info("[SemanticCache] 缓存已清空")
+            logger.info("[SemanticCache] 缓存已清空 | collection={}", collection_name)
         except Exception as e:
             logger.warning("[SemanticCache] 清空失败 | error={}", e)
 

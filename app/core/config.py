@@ -126,7 +126,17 @@ def get_settings() -> AppSettings:
 
     使用 lru_cache 实现进程内单例，全局只读取一次 .env
     """
-    return AppSettings()
+    _settings = AppSettings()
+
+    # Fail-fast：生产环境禁止使用默认 JWT 密钥
+    if _settings.jwt_secret_key == "please-change-this-secret-in-env":
+        if _settings.is_prod:
+            raise RuntimeError(
+                "🚨 JWT_SECRET_KEY 未配置！生产环境禁止使用默认密钥，"
+                "请在 .env 或环境变量中设置一个强随机字符串。"
+            )
+
+    return _settings
 
 
 # 全局配置实例，业务代码直接 import 使用

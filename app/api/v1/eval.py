@@ -6,10 +6,12 @@ RAG 评测接口
 2. POST /api/v1/eval/rag      — 端到端评测（输入问题 → 自动检索+生成+评分）
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from app.api.deps import get_current_user
 from app.core.response import R
+from app.core.security import TokenPayload
 from app.service.eval_service import EvalService
 from app.service.rag_service import RAGService
 
@@ -35,7 +37,7 @@ class RAGEvalRequest(BaseModel):
 
 
 @router.post("/single", summary="单条 RAG 质量评测")
-async def eval_single(req: SingleEvalRequest):
+async def eval_single(req: SingleEvalRequest, user: TokenPayload = Depends(get_current_user)):
     """
     对一条 RAG 输出进行三维度评分：
     - Faithfulness（忠实度）：回答是否基于参考资料
@@ -61,7 +63,7 @@ async def eval_single(req: SingleEvalRequest):
 
 
 @router.post("/rag", summary="端到端 RAG 评测")
-async def eval_rag(req: RAGEvalRequest):
+async def eval_rag(req: RAGEvalRequest, user: TokenPayload = Depends(get_current_user)):
     """
     端到端评测流程：
     1. 对每个问题执行完整 RAG 流程（检索 + 生成）

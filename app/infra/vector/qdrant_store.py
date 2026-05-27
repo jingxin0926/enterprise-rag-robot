@@ -6,6 +6,7 @@ Qdrant 向量库客户端
 2. 开发阶段用内存模式（无需部署 Qdrant Server），数据持久化到本地目录
 3. 生产环境切换为 Qdrant Server（只需改 url 配置）
 4. embedding 模型首次调用会自动下载（~100MB），后续直接使用缓存
+5. 多租户隔离：每个租户使用独立的 collection（tenant_{id}_knowledge）
 """
 
 import uuid
@@ -17,6 +18,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
 from app.core.config import PROJECT_ROOT
+from app.core.tenant import get_tenant_collection_name
 
 # 本地持久化目录
 QDRANT_STORAGE_PATH = str(PROJECT_ROOT / "data" / "qdrant_storage")
@@ -26,7 +28,7 @@ QDRANT_STORAGE_PATH = str(PROJECT_ROOT / "data" / "qdrant_storage")
 EMBEDDING_MODEL = "BAAI/bge-small-zh-v1.5"
 EMBEDDING_DIM = 512
 
-# 默认集合名（知识库）
+# 默认集合名（知识库）— 保留兼容，实际使用以 tenant 为准
 DEFAULT_COLLECTION = "knowledge_base"
 
 
@@ -49,8 +51,9 @@ class QdrantStore:
         results = await store.search("问题", top_k=5)
     """
 
-    def __init__(self, collection_name: str = DEFAULT_COLLECTION) -> None:
-        self._collection_name = collection_name
+    def __init__(self, collection_name: str | None = None) -> None:
+        # 多租户：优先使用传入的 collection，否则根据当前租户上下文自动获取
+        self._collection_name = collection_name or get_tenant_collection_name()
 
         # 初始化客户端（本地持久化模式）
         Path(QDRANT_STORAGE_PATH).mkdir(parents=True, exist_ok=True)
@@ -195,13 +198,24 @@ class QdrantStore:
         logger.warning("[Qdrant] 删除集合 | name={}", self._collection_name)
 
 
-# 全局单例
-_qdrant_store: QdrantStore | None = None
+# 按 collection 名称缓存实例（多租户各自持有独立实例）
+_qdrant_stores: dict[str, QdrantStore] = {}
 
 
-def get_qdrant_store() -> QdrantStore:
-    """获取全局 Qdrant 实例"""
-    global _qdrant_store
-    if _qdrant_store is None:
-        _qdrant_store = QdrantStore()
-    return _qdrant_store
+def get_qdrant_store(collection_name: str | None = None) -> QdrantStore:
+    """
+    获取 Qdrant 实例（按租户隔离）
+
+    不传 collection_name 时，自动使用当前请求的租户 collection。
+    相同 collection 复用同一个实例。
+    """
+    name = collection_name or get_tenant_collection_name()
+    if name not in _qdrant_stores:
+        _qdrant_stores[name] = QdrantStore(collection_name=name)
+    return _qdrant_stores[name]
+
+
+def get_qdrant_client() -> QdrantClient:
+    """获取底层 Qdrant 客户端（用于启动重建等运维操作）"""
+    Path(QDRANT_STORAGE_PATH).mkdir(parents=True, exist_ok=True)
+    return QdrantClient(path=QDRANT_STORAGE_PATH)

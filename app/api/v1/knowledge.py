@@ -177,7 +177,7 @@ async def query_knowledge(req: KnowledgeQueryRequest, user: TokenPayload = Depen
 
 
 @router.get("/info", summary="知识库信息")
-async def knowledge_info():
+async def knowledge_info(user: TokenPayload = Depends(get_current_user)):
     """获取知识库基本信息（文档数量等）"""
     store = get_qdrant_store()
     info = store.get_collection_info()
