@@ -3,8 +3,8 @@ Qdrant 向量库客户端
 
 设计要点：
 1. 使用 qdrant-client 内置的 fastembed 做 embedding（ONNX，无需 GPU）
-2. 开发阶段用内存模式（无需部署 Qdrant Server），数据持久化到本地目录
-3. 生产环境切换为 Qdrant Server（只需改 url 配置）
+2. 开发阶段可用本地文件模式（无需部署 Qdrant Server）
+3. 生产环境通过 QDRANT_URL / QDRANT_HOST 连接独立 Qdrant Server
 4. embedding 模型首次调用会自动下载（~100MB），后续直接使用缓存
 5. 多租户隔离：每个租户使用独立的 collection（tenant_{id}_knowledge）
 """
@@ -17,11 +17,11 @@ from loguru import logger
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
-from app.core.config import PROJECT_ROOT
+from app.core.config import PROJECT_ROOT, settings
 from app.core.tenant import get_tenant_collection_name
 
 # 本地持久化目录
-QDRANT_STORAGE_PATH = str(PROJECT_ROOT / "data" / "qdrant_storage")
+QDRANT_STORAGE_PATH = str(PROJECT_ROOT / settings.qdrant_local_path)
 
 # Embedding 模型配置（fastembed 内置，首次使用自动下载）
 # BAAI/bge-small-zh-v1.5：中文优化，维度 512，文件仅 ~90MB，CPU 高效
@@ -55,19 +55,17 @@ class QdrantStore:
         # 多租户：优先使用传入的 collection，否则根据当前租户上下文自动获取
         self._collection_name = collection_name or get_tenant_collection_name()
 
-        # 初始化客户端（本地持久化模式）
-        Path(QDRANT_STORAGE_PATH).mkdir(parents=True, exist_ok=True)
-        self._client = QdrantClient(
-            path=QDRANT_STORAGE_PATH,
-        )
+        # 初始化客户端：生产连接 Qdrant Server，本地开发可使用文件模式
+        self._client = create_qdrant_client()
 
         # 确保集合存在
         self._ensure_collection()
 
         logger.info(
-            "✅ Qdrant 初始化 | collection={} storage={} model={}",
+            "✅ Qdrant 初始化 | collection={} mode={} target={} model={}",
             self._collection_name,
-            QDRANT_STORAGE_PATH,
+            get_qdrant_mode(),
+            get_qdrant_target(),
             EMBEDDING_MODEL,
         )
 
@@ -215,7 +213,28 @@ def get_qdrant_store(collection_name: str | None = None) -> QdrantStore:
     return _qdrant_stores[name]
 
 
-def get_qdrant_client() -> QdrantClient:
-    """获取底层 Qdrant 客户端（用于启动重建等运维操作）"""
+def get_qdrant_mode() -> str:
+    """返回当前 Qdrant 连接模式。"""
+    return "server" if settings.use_qdrant_server else "local"
+
+
+def get_qdrant_target() -> str:
+    """返回当前 Qdrant 连接目标，用于日志和排障。"""
+    return settings.qdrant_server_url or QDRANT_STORAGE_PATH
+
+
+def create_qdrant_client() -> QdrantClient:
+    """创建 Qdrant 客户端，按配置自动选择 Server 或本地文件模式。"""
+    if settings.use_qdrant_server:
+        return QdrantClient(
+            url=settings.qdrant_server_url,
+            api_key=settings.qdrant_api_key or None,
+        )
+
     Path(QDRANT_STORAGE_PATH).mkdir(parents=True, exist_ok=True)
     return QdrantClient(path=QDRANT_STORAGE_PATH)
+
+
+def get_qdrant_client() -> QdrantClient:
+    """获取底层 Qdrant 客户端（用于启动重建等运维操作）"""
+    return create_qdrant_client()

@@ -17,7 +17,7 @@ BM25 索引启动重建
 from loguru import logger
 from qdrant_client import QdrantClient
 
-from app.infra.vector.qdrant_store import QDRANT_STORAGE_PATH
+from app.infra.vector.qdrant_store import get_qdrant_client, get_qdrant_mode, get_qdrant_target
 from app.service.retrieval.hybrid_retriever import get_hybrid_retriever
 
 # 需要重建 BM25 的 collection 名称模式
@@ -35,19 +35,24 @@ async def rebuild_bm25_from_qdrant() -> None:
 
     在应用启动时调用（lifespan），确保混合检索可用。
     """
-    from pathlib import Path
-
-    storage_path = Path(QDRANT_STORAGE_PATH)
-    if not storage_path.exists():
-        logger.info("[BM25-Rebuild] Qdrant 存储目录不存在，跳过重建")
-        return
-
     try:
-        client = QdrantClient(path=QDRANT_STORAGE_PATH)
+        client = get_qdrant_client()
         collections = [c.name for c in client.get_collections().collections]
     except Exception as e:
-        logger.warning("[BM25-Rebuild] 无法连接 Qdrant，跳过重建 | error={}", e)
+        logger.warning(
+            "[BM25-Rebuild] 无法连接 Qdrant，跳过重建 | mode={} target={} error={}",
+            get_qdrant_mode(),
+            get_qdrant_target(),
+            e,
+        )
         return
+
+    logger.info(
+        "[BM25-Rebuild] 扫描 Qdrant | mode={} target={} collections={}",
+        get_qdrant_mode(),
+        get_qdrant_target(),
+        len(collections),
+    )
 
     # 筛选出知识库 collection（default + 各租户）
     knowledge_collections = []

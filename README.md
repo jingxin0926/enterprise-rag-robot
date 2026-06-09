@@ -120,6 +120,7 @@ app/
 - Python 3.12+
 - uv (包管理器)
 - Redis 7 (可选，不启动时自动降级到内存)
+- Qdrant Server（生产推荐；本地开发不配置时使用文件模式）
 
 ### 本地启动
 
@@ -141,12 +142,24 @@ open http://localhost:8000/docs
 ### Docker 部署
 
 ```bash
-# 一键部署（含 Redis）
+# 一键部署（含 Redis + Qdrant）
 docker compose -f deploy/docker-compose.yml up -d --build
 
 # 健康检查
 curl http://localhost:8000/api/v1/health
 ```
+
+### Qdrant 部署模式
+
+本地开发默认使用 `data/qdrant_storage` 文件模式，便于零成本启动。
+云上部署推荐使用独立 Qdrant Server，应用通过环境变量连接：
+
+```bash
+QDRANT_URL=http://qdrant:6333
+QDRANT_API_KEY=your-qdrant-api-key
+```
+
+`deploy/docker-compose.yml` 已内置 Qdrant 服务，向量数据持久化到 `qdrant-data` 卷，并且不对公网暴露 `6333` 端口。
 
 ## API 接口
 
@@ -161,8 +174,8 @@ curl http://localhost:8000/api/v1/health
 | `/api/v1/knowledge/info` | GET | ✅ | 知识库信息 |
 | `/api/v1/eval/single` | POST | - | 单条 RAG 质量评测 |
 | `/api/v1/eval/rag` | POST | - | 端到端 RAG 评测 |
-| `/api/v1/prompts` | GET | - | 查看所有 Prompt |
-| `/api/v1/prompts/{name}` | PUT | - | 编辑 Prompt |
+| `/api/v1/prompts` | GET | ✅ | 查看所有 Prompt |
+| `/api/v1/prompts/{name}` | PUT | ✅ | 编辑 Prompt |
 
 ## License
 

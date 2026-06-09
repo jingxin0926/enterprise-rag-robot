@@ -84,6 +84,15 @@ class AppSettings(BaseSettings):
     redis_db: int = Field(default=0, description="Redis DB")
 
     # ============================================================
+    # Qdrant 向量库
+    # ============================================================
+    qdrant_url: str = Field(default="", description="Qdrant Server URL，例如 http://qdrant:6333")
+    qdrant_host: str = Field(default="", description="Qdrant Host（未配置 qdrant_url 时使用）")
+    qdrant_port: int = Field(default=6333, description="Qdrant HTTP 端口")
+    qdrant_api_key: str = Field(default="", description="Qdrant API Key（可选）")
+    qdrant_local_path: str = Field(default="data/qdrant_storage", description="本地 Qdrant 文件存储路径")
+
+    # ============================================================
     # 安全 / JWT
     # ============================================================
     jwt_secret_key: str = Field(
@@ -121,6 +130,20 @@ class AppSettings(BaseSettings):
         """构造 Redis URL"""
         password_part = f":{self.redis_password}@" if self.redis_password else ""
         return f"redis://{password_part}{self.redis_host}:{self.redis_port}/{self.redis_db}"
+
+    @property
+    def qdrant_server_url(self) -> str:
+        """构造 Qdrant Server URL；未配置时返回空字符串，表示使用本地文件模式。"""
+        if self.qdrant_url:
+            return self.qdrant_url.rstrip("/")
+        if self.qdrant_host:
+            return f"http://{self.qdrant_host}:{self.qdrant_port}"
+        return ""
+
+    @property
+    def use_qdrant_server(self) -> bool:
+        """是否连接独立 Qdrant Server。"""
+        return bool(self.qdrant_server_url)
 
 
 @lru_cache(maxsize=1)

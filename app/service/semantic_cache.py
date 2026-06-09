@@ -31,11 +31,10 @@ from loguru import logger
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
-from app.core.config import PROJECT_ROOT
 from app.core.tenant import get_current_tenant
+from app.infra.vector.qdrant_store import create_qdrant_client, get_qdrant_mode, get_qdrant_target
 
 # 缓存向量库配置（独立于知识库，避免互相干扰）
-_CACHE_STORAGE_PATH = str(PROJECT_ROOT / "data" / "semantic_cache")
 _EMBEDDING_DIM = 512  # BGE-small-zh-v1.5 的维度
 
 
@@ -90,9 +89,7 @@ class SemanticCache:
         collection_name = self._get_collection_name()
 
         if collection_name not in self._clients:
-            from pathlib import Path
-            Path(_CACHE_STORAGE_PATH).mkdir(parents=True, exist_ok=True)
-            client = QdrantClient(path=_CACHE_STORAGE_PATH)
+            client = create_qdrant_client()
             # 确保 collection 存在
             collections = [c.name for c in client.get_collections().collections]
             if collection_name not in collections:
@@ -101,6 +98,12 @@ class SemanticCache:
                     vectors_config=VectorParams(size=_EMBEDDING_DIM, distance=Distance.COSINE),
                 )
                 logger.info("[SemanticCache] 创建缓存 collection | name={}", collection_name)
+            logger.info(
+                "[SemanticCache] Qdrant 初始化 | collection={} mode={} target={}",
+                collection_name,
+                get_qdrant_mode(),
+                get_qdrant_target(),
+            )
             self._clients[collection_name] = client
 
         return self._clients[collection_name], collection_name

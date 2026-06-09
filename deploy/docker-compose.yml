@@ -24,13 +24,17 @@ services:
       - DEEPSEEK_MODEL=deepseek-chat
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_API_KEY=${QDRANT_API_KEY:-}
       - HF_ENDPOINT=https://hf-mirror.com
     volumes:
-      - app-data:/app/data      # 向量库持久化
+      - app-data:/app/data      # 本地运行数据（非 Qdrant 向量数据）
       - app-logs:/app/logs      # 日志持久化
     depends_on:
       redis:
         condition: service_healthy
+      qdrant:
+        condition: service_started
     restart: unless-stopped
     deploy:
       resources:
@@ -42,8 +46,6 @@ services:
   redis:
     image: redis:7-alpine
     container_name: smart-qa-redis
-    ports:
-      - "6379:6379"
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis-data:/data
@@ -54,8 +56,19 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # ==================== Qdrant 向量库 ====================
+  qdrant:
+    image: qdrant/qdrant:v1.12.6
+    container_name: smart-qa-qdrant
+    environment:
+      - QDRANT__SERVICE__API_KEY=${QDRANT_API_KEY:-}
+    volumes:
+      - qdrant-data:/qdrant/storage
+    restart: unless-stopped
+
 # ==================== 数据卷 ====================
 volumes:
   app-data:
   app-logs:
   redis-data:
+  qdrant-data:
