@@ -6,16 +6,16 @@
 # --- 第一阶段：构建（安装依赖） ---
 FROM python:3.12-slim AS builder
 
-# 安装 uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+# 安装 uv（生产构建优先走国内 PyPI 镜像，避免 ghcr.io 拉取不稳定）
+RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple --trusted-host mirrors.aliyun.com uv
 
 WORKDIR /app
 
 # 先拷贝依赖文件（利用 Docker 缓存层）
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock README.md ./
 
 # 安装依赖（不装 dev 依赖）
-RUN uv sync --frozen --no-dev --no-editable
+RUN uv sync --frozen --no-dev --no-editable --index-url https://mirrors.aliyun.com/pypi/simple
 
 # --- 第二阶段：运行（精简镜像） ---
 FROM python:3.12-slim AS runtime

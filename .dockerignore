@@ -14,6 +14,7 @@ data/
 .ruff_cache
 node_modules
 *.md
+!README.md
 !app/prompts/*.md
 !app/prompts/tenants/**/*.md
 tests/
