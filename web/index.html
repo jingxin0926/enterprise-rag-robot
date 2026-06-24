@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Smart QA System</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">S</div>
+          <div>
+            <div class="brand-name">Smart QA</div>
+            <div class="brand-subtitle">Enterprise Knowledge Assistant</div>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <button class="nav-item active" data-view="qa-view" type="button">问答工作台</button>
+          <button class="nav-item" data-view="knowledge-view" type="button">知识库管理</button>
+        </nav>
+
+        <div class="side-status">
+          <div class="status-row">
+            <span>服务状态</span>
+            <strong id="health-status">待检测</strong>
+          </div>
+          <div class="status-row">
+            <span>租户</span>
+            <strong id="tenant-id">未登录</strong>
+          </div>
+          <button id="health-btn" class="ghost-btn" type="button">刷新状态</button>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <h1>企业知识库问答</h1>
+            <p>文档入库、检索增强回答、来源追踪</p>
+          </div>
+          <div class="account">
+            <span id="account-name">未登录</span>
+            <button id="logout-btn" class="ghost-btn hidden" type="button">退出</button>
+          </div>
+        </header>
+
+        <section id="login-panel" class="panel login-panel">
+          <div class="panel-header">
+            <h2>登录</h2>
+          </div>
+          <form id="login-form" class="login-form">
+            <label>
+              用户名
+              <input id="username" name="username" autocomplete="username" value="admin" />
+            </label>
+            <label>
+              密码
+              <input id="password" name="password" type="password" autocomplete="current-password" />
+            </label>
+            <button class="primary-btn" type="submit">登录</button>
+          </form>
+        </section>
+
+        <section id="app-panel" class="workspace hidden">
+          <section id="qa-view" class="view active">
+            <div class="qa-layout">
+              <section class="panel chat-panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>智能问答</h2>
+                    <span id="session-label">新会话</span>
+                  </div>
+                  <button id="new-session-btn" class="ghost-btn" type="button">新会话</button>
+                </div>
+                <div id="messages" class="messages"></div>
+                <form id="question-form" class="question-form">
+                  <textarea id="question" rows="3" placeholder="输入问题"></textarea>
+                  <div class="form-actions">
+                    <label class="inline-control">
+                      Top K
+                      <input id="top-k" type="number" min="1" max="20" value="5" />
+                    </label>
+                    <button class="primary-btn" type="submit">发送</button>
+                  </div>
+                </form>
+              </section>
+
+              <section class="panel source-panel">
+                <div class="panel-header">
+                  <h2>来源</h2>
+                </div>
+                <div id="sources" class="sources empty-state">暂无来源</div>
+              </section>
+            </div>
+          </section>
+
+          <section id="knowledge-view" class="view">
+            <div class="knowledge-grid">
+              <section class="panel">
+                <div class="panel-header">
+                  <h2>文档上传</h2>
+                </div>
+                <form id="upload-form" class="upload-form">
+                  <input id="file-input" type="file" multiple accept=".pdf,.doc,.docx,.md,.markdown,.txt" />
+                  <button class="primary-btn" type="submit">上传入库</button>
+                </form>
+                <div id="upload-log" class="log-list"></div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-header">
+                  <h2>知识库信息</h2>
+                  <button id="knowledge-info-btn" class="ghost-btn" type="button">刷新</button>
+                </div>
+                <dl class="metric-list">
+                  <div>
+                    <dt>Collection</dt>
+                    <dd id="collection-name">-</dd>
+                  </div>
+                  <div>
+                    <dt>向量点数</dt>
+                    <dd id="points-count">-</dd>
+                  </div>
+                  <div>
+                    <dt>状态</dt>
+                    <dd id="collection-status">-</dd>
+                  </div>
+                </dl>
+              </section>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+    <script src="./app.js"></script>
+  </body>
+</html>

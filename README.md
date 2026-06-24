@@ -142,12 +142,18 @@ open http://localhost:8000/docs
 ### Docker 部署
 
 ```bash
-# 一键部署（含 Redis + Qdrant）
-docker compose -f deploy/docker-compose.yml up -d --build
+# 一键部署（含 Nginx + FastAPI + Redis + Qdrant）
+docker compose --env-file .env -f deploy/docker-compose.yml up -d --build
 
 # 健康检查
 curl http://localhost:8000/api/v1/health
 ```
+
+部署完成后：
+
+- 前端页面：`http://服务器公网IP/`
+- 后端健康检查：`http://服务器公网IP/api/v1/health`
+- FastAPI 容器端口仅绑定本机 `127.0.0.1:8000`，公网统一走 Nginx。
 
 ### Qdrant 部署模式
 
