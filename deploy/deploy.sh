@@ -37,27 +37,21 @@ if [ ! -f .env ]; then
     exit 1
 fi
 
-# 加载环境变量
-export $(grep -v '^#' .env | xargs)
-
-# 构建并启动
-echo "📦 构建镜像..."
-docker compose -f deploy/docker-compose.yml build
-
-echo "🔄 启动服务..."
-docker compose -f deploy/docker-compose.yml up -d
+# 构建并启动。由 Compose 解析 .env，避免 shell 解析特殊字符导致密钥损坏。
+echo "📦 构建并启动服务..."
+docker compose --env-file .env -f deploy/docker-compose.yml up -d --build
 
 echo ""
 echo "✅ 部署完成！"
 echo ""
 echo "📍 服务地址："
-echo "   API:     http://$(hostname -I | awk '{print $1}'):8000"
-echo "   健康检查: http://$(hostname -I | awk '{print $1}'):8000/api/v1/health"
-echo "   探活:    http://$(hostname -I | awk '{print $1}'):8000/api/v1/health/ping"
+echo "   前端:     http://<服务器公网IP>/"
+echo "   健康检查: http://<服务器公网IP>/api/v1/health"
+echo "   本机探活: curl http://127.0.0.1:8000/api/v1/health/ping"
 echo "   提示:    生产环境默认关闭 /docs，如需调试请临时使用 APP_ENV=dev"
 echo ""
 echo "📋 常用命令："
-echo "   查看日志:   docker compose -f deploy/docker-compose.yml logs -f app"
-echo "   重启服务:   docker compose -f deploy/docker-compose.yml restart app"
-echo "   停止服务:   docker compose -f deploy/docker-compose.yml down"
-echo "   查看状态:   docker compose -f deploy/docker-compose.yml ps"
+echo "   查看日志:   docker compose --env-file .env -f deploy/docker-compose.yml logs -f app"
+echo "   重启服务:   docker compose --env-file .env -f deploy/docker-compose.yml restart app"
+echo "   停止服务:   docker compose --env-file .env -f deploy/docker-compose.yml down"
+echo "   查看状态:   docker compose --env-file .env -f deploy/docker-compose.yml ps"
