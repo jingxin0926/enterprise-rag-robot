@@ -177,6 +177,11 @@ button {
   letter-spacing: 0;
 }
 
+.panel-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .panel-header span {
   display: block;
   margin-top: 4px;

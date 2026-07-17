@@ -226,6 +226,39 @@ class QdrantStore:
         )
         logger.info("[Qdrant] 删除文档向量 | collection={} document_id={}", self._collection_name, document_id)
 
+    def list_legacy_points(self, batch_size: int = 256) -> list[dict]:
+        """读取尚未关联 document_id 的历史向量 payload。"""
+        points: list[dict] = []
+        offset = None
+        while True:
+            batch, next_offset = self._client.scroll(
+                collection_name=self._collection_name,
+                limit=batch_size,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            for point in batch:
+                payload = dict(point.payload or {})
+                if payload.get("content") and not payload.get("document_id"):
+                    points.append({"point_id": str(point.id), "payload": payload})
+            if next_offset is None:
+                break
+            offset = next_offset
+        return points
+
+    def assign_document_id(self, point_ids: list[str], document_id: str) -> None:
+        """为已有向量补充文档关联键，不重算 embedding。"""
+        if not point_ids:
+            return
+        self._client.set_payload(
+            collection_name=self._collection_name,
+            payload={"document_id": document_id, "legacy": True},
+            points=point_ids,
+            wait=True,
+        )
+        logger.info("[Qdrant] 回填文档关联键 | collection={} document_id={} count={}", self._collection_name, document_id, len(point_ids))
+
 
 # 按 collection 名称缓存实例（多租户各自持有独立实例）
 _qdrant_stores: dict[str, QdrantStore] = {}

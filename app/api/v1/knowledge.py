@@ -21,6 +21,7 @@ from app.infra.vector.qdrant_store import get_qdrant_store
 from app.middleware.trace import get_trace_id
 from app.service.knowledge.document_ingest_service import DocumentIngestService
 from app.service.knowledge.document_management_service import DocumentManagementService
+from app.service.knowledge.legacy_backfill_service import LegacyBackfillService
 from app.service.rag_service import RAGService
 
 router = APIRouter(prefix="/knowledge", tags=["知识库"])
@@ -28,6 +29,7 @@ router = APIRouter(prefix="/knowledge", tags=["知识库"])
 # 服务实例
 _document_ingest_service = DocumentIngestService()
 _document_management_service = DocumentManagementService()
+_legacy_backfill_service = LegacyBackfillService()
 
 
 class KnowledgeQueryRequest(BaseModel):
@@ -164,6 +166,28 @@ async def delete_document(document_id: str, user: TokenPayload = Depends(get_cur
     if not deleted:
         return R.fail(code=404, message="文档不存在或已删除", trace_id=get_trace_id())
     return R.success(data={"document_id": document_id}, message="文档已删除", trace_id=get_trace_id())
+
+
+@router.post("/backfill-legacy", summary="回填历史向量元数据")
+async def backfill_legacy_documents(user: TokenPayload = Depends(get_current_user)):
+    """将当前租户未关联文档的历史向量转换为可管理文档，仅管理员可执行。"""
+    if user.role != "admin":
+        return R.fail(code=403, message="仅管理员可执行历史数据回填", trace_id=get_trace_id())
+
+    result = await _legacy_backfill_service.backfill(
+        tenant_id=user.tenant_id,
+        operator_id=user.user_id,
+        trace_id=get_trace_id(),
+    )
+    return R.success(
+        data={
+            "documents_created": result.documents_created,
+            "chunks_backfilled": result.chunks_backfilled,
+            "skipped_chunks": result.skipped_chunks,
+        },
+        message=f"历史数据回填完成，新增 {result.documents_created} 个文档、{result.chunks_backfilled} 个切片",
+        trace_id=get_trace_id(),
+    )
 
 
 @router.post("/query", summary="知识库问答 (RAG)")

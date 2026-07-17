@@ -189,6 +189,21 @@ async function deleteDocument(event) {
   }
 }
 
+async function backfillLegacyDocuments(event) {
+  if (!window.confirm("将为当前租户未关联文档的历史向量补齐元数据，不会重新生成向量。确认继续？")) return;
+  const restore = setLoading(event.currentTarget, "导入中");
+  try {
+    const payload = await api("/knowledge/backfill-legacy", { method: "POST" });
+    const data = payload.data || {};
+    await Promise.all([refreshDocuments(), refreshKnowledgeInfo()]);
+    showToast(`已导入 ${data.documents_created || 0} 个文档、${data.chunks_backfilled || 0} 个切片`);
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    restore();
+  }
+}
+
 async function login(event) {
   event.preventDefault();
   const restore = setLoading(event.submitter, "登录中");
@@ -326,6 +341,7 @@ function bindEvents() {
   $("#health-btn").addEventListener("click", refreshHealth);
   $("#knowledge-info-btn").addEventListener("click", refreshKnowledgeInfo);
   $("#documents-refresh-btn").addEventListener("click", () => refreshDocuments().catch((error) => showToast(error.message)));
+  $("#backfill-legacy-btn").addEventListener("click", backfillLegacyDocuments);
   $("#document-list").addEventListener("click", deleteDocument);
   $("#upload-form").addEventListener("submit", uploadDocuments);
   $("#question-form").addEventListener("submit", askQuestion);

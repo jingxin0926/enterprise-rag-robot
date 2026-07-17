@@ -72,6 +72,43 @@ class KnowledgeRepository:
         )
 
     @staticmethod
+    async def ensure_legacy_document(session: AsyncSession, document: dict[str, Any]) -> None:
+        """幂等创建历史回填文档，稳定 ID 保证重复执行不产生重复记录。"""
+        await session.execute(
+            text(
+                """
+                INSERT INTO kb_document(
+                    id, tenant_id, knowledge_base_id, file_name, file_extension, content_type,
+                    file_size, checksum, storage_path, status, chunk_count, created_by
+                ) VALUES (
+                    :id, :tenant_id, :knowledge_base_id, :file_name, :file_extension, :content_type,
+                    :file_size, :checksum, :storage_path, :status, :chunk_count, :created_by
+                ) ON DUPLICATE KEY UPDATE
+                    file_name = VALUES(file_name),
+                    file_size = VALUES(file_size),
+                    chunk_count = VALUES(chunk_count),
+                    status = VALUES(status),
+                    error_message = ''
+                """
+            ),
+            document,
+        )
+
+    @staticmethod
+    async def ensure_legacy_task(session: AsyncSession, task: dict[str, Any]) -> None:
+        """幂等记录历史回填任务结果。"""
+        await session.execute(
+            text(
+                """
+                INSERT INTO kb_ingest_task(id, tenant_id, document_id, task_type, status, finished_at)
+                VALUES (:id, :tenant_id, :document_id, 'BACKFILL', 'COMPLETED', NOW())
+                ON DUPLICATE KEY UPDATE status = 'COMPLETED', finished_at = NOW(), error_message = ''
+                """
+            ),
+            task,
+        )
+
+    @staticmethod
     async def update_document_status(
         session: AsyncSession,
         document_id: str,
@@ -138,6 +175,29 @@ class KnowledgeRepository:
                     :id, :tenant_id, :document_id, :chunk_index, :qdrant_point_id,
                     :content_hash, :content_length, :metadata
                 )
+                """
+            ),
+            list(chunks),
+        )
+
+    @staticmethod
+    async def ensure_legacy_chunks(session: AsyncSession, chunks: Sequence[dict[str, Any]]) -> None:
+        """幂等写入历史向量的切片元数据。"""
+        if not chunks:
+            return
+        await session.execute(
+            text(
+                """
+                INSERT INTO kb_document_chunk(
+                    id, tenant_id, document_id, chunk_index, qdrant_point_id,
+                    content_hash, content_length, metadata
+                ) VALUES (
+                    :id, :tenant_id, :document_id, :chunk_index, :qdrant_point_id,
+                    :content_hash, :content_length, :metadata
+                ) ON DUPLICATE KEY UPDATE
+                    metadata = VALUES(metadata),
+                    content_length = VALUES(content_length),
+                    deleted = 0
                 """
             ),
             list(chunks),

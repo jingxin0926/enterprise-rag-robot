@@ -50,8 +50,10 @@ class DocumentManagementService:
                 },
             )
 
-        storage_path = Path(document["storage_path"])
-        storage_path.unlink(missing_ok=True)
+        if document["storage_path"]:
+            storage_path = Path(document["storage_path"])
+            if storage_path.is_file():
+                storage_path.unlink(missing_ok=True)
         from app.service.semantic_cache import get_semantic_cache
 
         get_semantic_cache().clear()
