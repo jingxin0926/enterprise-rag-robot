@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS kb_document_chunk (
     tenant_id VARCHAR(64) NOT NULL,
     document_id CHAR(36) NOT NULL,
     chunk_index INT UNSIGNED NOT NULL,
-    qdrant_point_id CHAR(32) NOT NULL,
+    qdrant_point_id VARCHAR(64) NOT NULL,
     content_hash CHAR(64) NOT NULL,
     content_length INT UNSIGNED NOT NULL,
     metadata JSON NOT NULL,

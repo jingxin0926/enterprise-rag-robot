@@ -33,6 +33,15 @@ def test_initial_migration_contains_document_lifecycle_tables() -> None:
     ):
         assert f"CREATE TABLE IF NOT EXISTS {table}" in migration
 
+    assert "qdrant_point_id VARCHAR(64) NOT NULL" in migration
+
+
+def test_follow_up_migration_expands_legacy_qdrant_point_id() -> None:
+    """历史 UUID 点 ID 带连字符，迁移必须兼容至少 36 位。"""
+    migration = (PROJECT_ROOT / "db" / "migrations" / "V002__expand_qdrant_point_id.sql").read_text(encoding="utf-8")
+
+    assert "qdrant_point_id VARCHAR(64) NOT NULL" in migration
+
 
 def test_legacy_points_are_grouped_by_source_with_fallback_name() -> None:
     """历史回填按来源聚合，缺失来源时归入统一的可识别分组。"""
