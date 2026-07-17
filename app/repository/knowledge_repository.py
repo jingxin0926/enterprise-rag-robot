@@ -161,6 +161,62 @@ class KnowledgeRepository:
         )
 
     @staticmethod
+    async def get_task_context(session: AsyncSession, task_id: str) -> dict[str, Any] | None:
+        """获取 Worker 处理文档任务所需的完整上下文。"""
+        result = await session.execute(
+            text(
+                """
+                SELECT t.id AS task_id, t.status AS task_status, t.retry_count,
+                       d.id AS document_id, d.tenant_id, d.file_name, d.storage_path,
+                       d.status AS document_status, d.created_by
+                FROM kb_ingest_task t
+                JOIN kb_document d ON d.id = t.document_id
+                WHERE t.id = :task_id AND t.task_type = 'INGEST' AND d.deleted = 0
+                """
+            ),
+            {"task_id": task_id},
+        )
+        row = result.mappings().one_or_none()
+        return dict(row) if row else None
+
+    @staticmethod
+    async def get_task_detail(session: AsyncSession, tenant_id: str, task_id: str) -> dict[str, Any] | None:
+        """查询租户可见的任务状态，供前端轮询。"""
+        result = await session.execute(
+            text(
+                """
+                SELECT t.id, t.document_id, t.task_type, t.status, t.retry_count, t.error_message,
+                       t.started_at, t.finished_at, t.create_time, t.update_time,
+                       d.file_name, d.chunk_count, d.status AS document_status
+                FROM kb_ingest_task t
+                JOIN kb_document d ON d.id = t.document_id
+                WHERE t.id = :task_id AND t.tenant_id = :tenant_id
+                """
+            ),
+            {"tenant_id": tenant_id, "task_id": task_id},
+        )
+        row = result.mappings().one_or_none()
+        return dict(row) if row else None
+
+    @staticmethod
+    async def mark_task_retry(session: AsyncSession, task_id: str, error_message: str) -> int:
+        """递增失败次数并返回递增后的次数。"""
+        await session.execute(
+            text(
+                """
+                UPDATE kb_ingest_task
+                SET status = 'RETRYING', retry_count = retry_count + 1, error_message = :error_message
+                WHERE id = :task_id
+                """
+            ),
+            {"task_id": task_id, "error_message": error_message[:1000]},
+        )
+        result = await session.execute(
+            text("SELECT retry_count FROM kb_ingest_task WHERE id = :task_id"), {"task_id": task_id}
+        )
+        return int(result.scalar_one())
+
+    @staticmethod
     async def create_chunks(session: AsyncSession, chunks: Sequence[dict[str, Any]]) -> None:
         """批量保存切片元数据。"""
         if not chunks:

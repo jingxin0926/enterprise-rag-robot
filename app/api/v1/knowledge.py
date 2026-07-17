@@ -17,8 +17,11 @@ from sse_starlette.sse import EventSourceResponse
 from app.api.deps import get_current_user
 from app.core.response import R
 from app.core.security import TokenPayload
+from app.infra.database.database import session_scope
+from app.infra.queue.document_task_queue import DocumentTaskQueue
 from app.infra.vector.qdrant_store import get_qdrant_store
 from app.middleware.trace import get_trace_id
+from app.repository.knowledge_repository import KnowledgeRepository
 from app.service.knowledge.document_ingest_service import DocumentIngestService
 from app.service.knowledge.document_management_service import DocumentManagementService
 from app.service.knowledge.legacy_backfill_service import LegacyBackfillService
@@ -30,6 +33,7 @@ router = APIRouter(prefix="/knowledge", tags=["知识库"])
 _document_ingest_service = DocumentIngestService()
 _document_management_service = DocumentManagementService()
 _legacy_backfill_service = LegacyBackfillService()
+_document_task_queue = DocumentTaskQueue()
 
 
 class KnowledgeQueryRequest(BaseModel):
@@ -85,7 +89,7 @@ async def upload_document(file: UploadFile = File(...), user: TokenPayload = Dep
         return R.fail(code=400, message="文件大小超过 20MB 限制", trace_id=get_trace_id())
 
     try:
-        result = await _document_ingest_service.ingest(
+        result = await _document_ingest_service.submit(
             tenant_id=user.tenant_id,
             operator_id=user.user_id,
             file_name=filename,
@@ -93,16 +97,16 @@ async def upload_document(file: UploadFile = File(...), user: TokenPayload = Dep
             content_type=file.content_type or "",
             trace_id=get_trace_id(),
         )
+        await _document_task_queue.enqueue(result.task_id)
 
         return R.success(
             data={
                 "document_id": result.document_id,
                 "task_id": result.task_id,
                 "filename": result.file_name,
-                "chunks_count": result.chunk_count,
-                "status": "COMPLETED",
+                "status": "PENDING",
             },
-            message=f"文档 '{filename}' 入库成功，共 {result.chunk_count} 个片段",
+            message=f"文档 '{filename}' 已提交入库任务",
             trace_id=get_trace_id(),
         )
     except Exception as exc:
@@ -118,7 +122,7 @@ async def upload_text(req: TextUploadRequest, user: TokenPayload = Depends(get_c
     适合小段文本、FAQ 等场景
     """
     source_name = req.source_name if Path(req.source_name).suffix else f"{req.source_name}.txt"
-    result = await _document_ingest_service.ingest(
+    result = await _document_ingest_service.submit(
         tenant_id=user.tenant_id,
         operator_id=user.user_id,
         file_name=source_name,
@@ -126,16 +130,16 @@ async def upload_text(req: TextUploadRequest, user: TokenPayload = Depends(get_c
         content_type="text/plain; charset=utf-8",
         trace_id=get_trace_id(),
     )
+    await _document_task_queue.enqueue(result.task_id)
 
     return R.success(
         data={
             "document_id": result.document_id,
             "task_id": result.task_id,
             "source": result.file_name,
-            "chunks_count": result.chunk_count,
-            "status": "COMPLETED",
+            "status": "PENDING",
         },
-        message=f"文本入库成功，共 {result.chunk_count} 个片段",
+        message=f"文本 '{result.file_name}' 已提交入库任务",
         trace_id=get_trace_id(),
     )
 
@@ -152,6 +156,16 @@ async def list_documents(
         data=DocumentPageResponse(total=total, page=page, page_size=page_size, items=items).model_dump(mode="json"),
         trace_id=get_trace_id(),
     )
+
+
+@router.get("/tasks/{task_id}", summary="查询入库任务")
+async def get_ingest_task(task_id: str, user: TokenPayload = Depends(get_current_user)):
+    """查询当前租户的异步入库任务状态、重试次数和失败原因。"""
+    async with session_scope() as session:
+        task = await KnowledgeRepository.get_task_detail(session, user.tenant_id, task_id)
+    if task is None:
+        return R.fail(code=404, message="入库任务不存在", trace_id=get_trace_id())
+    return R.success(data=task, trace_id=get_trace_id())
 
 
 @router.delete("/documents/{document_id}", summary="删除文档")

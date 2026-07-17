@@ -47,6 +47,47 @@ services:
           memory: 4G            # 内存限制（embedding 模型需要 ~2G）
           cpus: "4"
 
+  # ==================== 文档异步 Worker ====================
+  worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: smart-qa-worker
+    command: python -m app.worker.document_worker
+    environment:
+      - APP_ENV=prod
+      - LOG_LEVEL=INFO
+      - LOG_CONSOLE=true
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - ADMIN_INIT_PASSWORD=${ADMIN_INIT_PASSWORD}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=${MYSQL_USER:-smartqa}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-smart_qa}
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_API_KEY=${QDRANT_API_KEY:-}
+      - HF_ENDPOINT=https://hf-mirror.com
+    volumes:
+      - app-data:/app/data
+      - app-logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2"
+
   # ==================== Nginx 前端与网关 ====================
   nginx:
     image: nginx:1.27-alpine

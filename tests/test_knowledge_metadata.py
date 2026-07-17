@@ -1,6 +1,11 @@
 """P1 知识库元数据基础行为测试。"""
 
+from unittest.mock import AsyncMock
+
+import pytest
+
 from app.core.config import PROJECT_ROOT
+from app.infra.queue.document_task_queue import DocumentTaskQueue
 from app.service.knowledge.legacy_backfill_service import LegacyBackfillService
 from app.service.retrieval.bm25_retriever import BM25Retriever
 
@@ -55,3 +60,14 @@ def test_legacy_points_are_grouped_by_source_with_fallback_name() -> None:
 
     assert len(grouped["研发规范.md"]) == 2
     assert grouped["历史未命名文档"][0]["point_id"] == "p3"
+
+
+@pytest.mark.asyncio
+async def test_document_task_queue_enqueues_task_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    """上传接口投递的消息只携带任务 ID，业务数据以 MySQL 为准。"""
+    redis = AsyncMock()
+    monkeypatch.setattr("app.infra.queue.document_task_queue.get_redis", AsyncMock(return_value=redis))
+
+    await DocumentTaskQueue().enqueue("task-001")
+
+    redis.lpush.assert_awaited_once_with("smartqa:document-task:pending", '{"task_id": "task-001"}')

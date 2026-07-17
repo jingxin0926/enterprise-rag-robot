@@ -143,7 +143,7 @@ open http://localhost:8000/docs
 ### Docker 部署
 
 ```bash
-# 一键部署（含 Nginx + FastAPI + Redis + Qdrant）
+# 一键部署（含 Nginx + FastAPI + Redis + Qdrant + 文档 Worker）
 docker compose --env-file .env -f deploy/docker-compose.yml up -d --build
 
 # 健康检查
@@ -151,6 +151,8 @@ curl http://localhost:8000/api/v1/health
 ```
 
 生产部署还需在 `.env` 中配置 `MYSQL_PASSWORD` 和 `MYSQL_ROOT_PASSWORD`。MySQL 仅在 Docker 内网开放，保存知识库、文档、入库任务、切片元数据与操作审计；Qdrant 仅保存向量和检索 payload。
+
+文档上传采用异步任务模式：接口创建 `PENDING` 任务并投递 Redis，`worker` 容器执行解析、切分和向量化。任务失败会自动重试，重试次数由 `DOCUMENT_TASK_MAX_RETRIES` 控制。
 
 部署完成后：
 
@@ -182,6 +184,7 @@ QDRANT_API_KEY=your-qdrant-api-key
 | `/api/v1/knowledge/documents` | GET | ✅ | 分页查询文档处理状态 |
 | `/api/v1/knowledge/documents/{document_id}` | DELETE | ✅ | 删除文档及其向量切片 |
 | `/api/v1/knowledge/backfill-legacy` | POST | 管理员 | 回填历史 Qdrant 向量元数据 |
+| `/api/v1/knowledge/tasks/{task_id}` | GET | ✅ | 查询异步入库任务状态与重试信息 |
 | `/api/v1/knowledge/query` | POST | ✅ | 知识库 RAG 问答 |
 | `/api/v1/knowledge/info` | GET | ✅ | 知识库信息 |
 | `/api/v1/eval/single` | POST | - | 单条 RAG 质量评测 |

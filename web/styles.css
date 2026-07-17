@@ -457,6 +457,11 @@ textarea:focus {
   color: var(--primary-strong);
 }
 
+.status-retrying {
+  background: #fff7e6;
+  color: #9a6700;
+}
+
 .document-error {
   max-width: 360px;
   margin: 5px 0 0;

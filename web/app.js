@@ -6,6 +6,9 @@ const state = {
   user: JSON.parse(localStorage.getItem("smart_qa_user") || "null"),
 };
 
+const ACTIVE_DOCUMENT_STATUSES = new Set(["PENDING", "PARSING", "CHUNKING", "INDEXING", "RUNNING", "RETRYING"]);
+let documentPollTimer = null;
+
 const $ = (selector) => document.querySelector(selector);
 
 function setText(selector, value) {
@@ -147,6 +150,7 @@ function renderDocuments(items, total) {
 
   if (!Array.isArray(items) || items.length === 0) {
     body.innerHTML = '<tr><td class="table-empty" colspan="6">暂无文档</td></tr>';
+    stopDocumentPolling();
     return;
   }
 
@@ -164,12 +168,32 @@ function renderDocuments(items, total) {
     `;
     body.appendChild(row);
   });
+
+  const hasActiveTask = items.some((item) => ACTIVE_DOCUMENT_STATUSES.has(item.status));
+  if (hasActiveTask) {
+    startDocumentPolling();
+  } else {
+    stopDocumentPolling();
+  }
 }
 
 async function refreshDocuments() {
   const payload = await api("/knowledge/documents?page=1&page_size=50");
   const data = payload.data || {};
   renderDocuments(data.items || [], Number(data.total || 0));
+}
+
+function startDocumentPolling() {
+  if (documentPollTimer) return;
+  documentPollTimer = window.setInterval(() => {
+    refreshDocuments().catch(() => {});
+  }, 3000);
+}
+
+function stopDocumentPolling() {
+  if (!documentPollTimer) return;
+  window.clearInterval(documentPollTimer);
+  documentPollTimer = null;
 }
 
 async function deleteDocument(event) {
@@ -265,12 +289,13 @@ async function uploadDocuments(event) {
           method: "POST",
           body: formData,
         });
-        appendLog(`${file.name}: ${payload.message || "入库成功"}`, "success");
+        appendLog(`${file.name}: ${payload.message || "任务已提交"}`, "success");
       } catch (error) {
         appendLog(`${file.name}: ${error.message}`, "error");
       }
     }
     await Promise.all([refreshKnowledgeInfo(), refreshDocuments()]);
+    startDocumentPolling();
   } finally {
     restore();
   }

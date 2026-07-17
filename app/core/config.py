@@ -94,6 +94,11 @@ class AppSettings(BaseSettings):
     mysql_database: str = Field(default="smart_qa", description="MySQL 数据库名")
 
     # ============================================================
+    # 异步文档任务
+    # ============================================================
+    document_task_max_retries: int = Field(default=3, ge=0, le=10, description="文档任务最大重试次数")
+
+    # ============================================================
     # Qdrant 向量库
     # ============================================================
     qdrant_url: str = Field(default="", description="Qdrant Server URL，例如 http://qdrant:6333")

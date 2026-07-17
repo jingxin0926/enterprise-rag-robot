@@ -5,7 +5,8 @@ FastAPI 应用入口
     uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 """
 
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -53,6 +54,11 @@ async def lifespan(app: FastAPI):
 
     await rebuild_bm25_from_qdrant()
 
+    # Worker 完成异步入库后通知当前 Web 进程刷新对应租户的 BM25 内存索引。
+    from app.service.retrieval.bm25_sync_listener import run_bm25_sync_listener
+
+    bm25_sync_task = asyncio.create_task(run_bm25_sync_listener(), name="bm25-sync-listener")
+
     logger.info("✅ 应用启动完成，监听端口 {}", settings.app_port)
 
     yield  # 应用运行中
@@ -65,6 +71,9 @@ async def lifespan(app: FastAPI):
         await deepseek_client.close()
     from app.infra.cache.redis_client import close_redis
 
+    bm25_sync_task.cancel()
+    with suppress(asyncio.CancelledError):
+        await bm25_sync_task
     await close_redis()
     from app.infra.database.database import close_database
 
