@@ -37,6 +37,7 @@ dependencies = [
     # 元数据存储（知识库、文档、任务与审计）
     "sqlalchemy>=2.0.36",
     "asyncmy>=0.2.10",
+    "cryptography>=44.0.0",
     # RAG - 向量库（内置 fastembed，ONNX 推理，不依赖 PyTorch）
     "qdrant-client[fastembed]>=1.12.0",
     # RAG - 文本切分
