@@ -7,10 +7,9 @@
 3. GET  /api/v1/knowledge/info     — 获取知识库信息
 """
 
-import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 from loguru import logger
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
@@ -20,14 +19,15 @@ from app.core.response import R
 from app.core.security import TokenPayload
 from app.infra.vector.qdrant_store import get_qdrant_store
 from app.middleware.trace import get_trace_id
-from app.service.document_service import DocumentService
+from app.service.knowledge.document_ingest_service import DocumentIngestService
+from app.service.knowledge.document_management_service import DocumentManagementService
 from app.service.rag_service import RAGService
-from app.service.retrieval.hybrid_retriever import get_hybrid_retriever
 
 router = APIRouter(prefix="/knowledge", tags=["知识库"])
 
 # 服务实例
-_doc_service = DocumentService()
+_document_ingest_service = DocumentIngestService()
+_document_management_service = DocumentManagementService()
 
 
 class KnowledgeQueryRequest(BaseModel):
@@ -43,6 +43,15 @@ class TextUploadRequest(BaseModel):
 
     content: str = Field(..., min_length=10, description="文本内容")
     source_name: str = Field(default="粘贴文本", description="来源名称")
+
+
+class DocumentPageResponse(BaseModel):
+    """文档分页响应。"""
+
+    total: int
+    page: int
+    page_size: int
+    items: list[dict]
 
 
 # 支持的文件类型
@@ -73,45 +82,30 @@ async def upload_document(file: UploadFile = File(...), user: TokenPayload = Dep
     if len(content) > MAX_FILE_SIZE:
         return R.fail(code=400, message="文件大小超过 20MB 限制", trace_id=get_trace_id())
 
-    # 3. 保存到临时文件（解析需要文件路径）
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(content)
-        tmp_path = tmp.name
-
     try:
-        # 4. 解析 + 切分
-        chunks = _doc_service.parse_and_split(tmp_path, file_name=filename)
-        if not chunks:
-            return R.fail(code=400, message="文档解析结果为空，请确认文件内容", trace_id=get_trace_id())
-
-        # 5. 向量化 + 存入 Qdrant
-        store = get_qdrant_store()
-        texts = [c.content for c in chunks]
-        metadatas = [c.metadata for c in chunks]
-        doc_ids = store.add_documents(texts, metadatas)
-
-        # 6. 同步到 BM25 索引（混合检索用）
-        hybrid = get_hybrid_retriever()
-        hybrid.add_documents(texts, metadatas)
-
-        # 7. 清除语义缓存（知识库已更新，旧缓存可能返回过期答案）
-        from app.service.semantic_cache import get_semantic_cache
-        get_semantic_cache().clear()
-
-        logger.info("[Knowledge] 文档入库成功 | file={} chunks={}", filename, len(chunks))
+        result = await _document_ingest_service.ingest(
+            tenant_id=user.tenant_id,
+            operator_id=user.user_id,
+            file_name=filename,
+            content=content,
+            content_type=file.content_type or "",
+            trace_id=get_trace_id(),
+        )
 
         return R.success(
             data={
-                "filename": filename,
-                "chunks_count": len(chunks),
-                "doc_ids_sample": doc_ids[:3],  # 返回前 3 个 ID 作为示例
+                "document_id": result.document_id,
+                "task_id": result.task_id,
+                "filename": result.file_name,
+                "chunks_count": result.chunk_count,
+                "status": "COMPLETED",
             },
-            message=f"文档 '{filename}' 入库成功，共 {len(chunks)} 个片段",
+            message=f"文档 '{filename}' 入库成功，共 {result.chunk_count} 个片段",
             trace_id=get_trace_id(),
         )
-    finally:
-        # 清理临时文件
-        Path(tmp_path).unlink(missing_ok=True)
+    except Exception as exc:
+        logger.exception("[Knowledge] 文档入库失败 | file={} error={}", filename, exc)
+        return R.fail(code=500, message="文档入库失败，请查看文档处理状态或服务日志", trace_id=get_trace_id())
 
 
 @router.post("/upload_text", summary="直接上传文本到知识库")
@@ -121,28 +115,55 @@ async def upload_text(req: TextUploadRequest, user: TokenPayload = Depends(get_c
 
     适合小段文本、FAQ 等场景
     """
-    chunks = _doc_service.parse_text_content(req.content, source_name=req.source_name)
-    if not chunks:
-        return R.fail(code=400, message="文本内容为空", trace_id=get_trace_id())
-
-    store = get_qdrant_store()
-    texts = [c.content for c in chunks]
-    metadatas = [c.metadata for c in chunks]
-    store.add_documents(texts, metadatas)
-
-    # 同步到 BM25 索引
-    hybrid = get_hybrid_retriever()
-    hybrid.add_documents(texts, metadatas)
-
-    # 清除语义缓存（知识库已更新，旧缓存可能返回过期答案）
-    from app.service.semantic_cache import get_semantic_cache
-    get_semantic_cache().clear()
-
-    return R.success(
-        data={"source": req.source_name, "chunks_count": len(chunks)},
-        message=f"文本入库成功，共 {len(chunks)} 个片段",
+    source_name = req.source_name if Path(req.source_name).suffix else f"{req.source_name}.txt"
+    result = await _document_ingest_service.ingest(
+        tenant_id=user.tenant_id,
+        operator_id=user.user_id,
+        file_name=source_name,
+        content=req.content.encode("utf-8"),
+        content_type="text/plain; charset=utf-8",
         trace_id=get_trace_id(),
     )
+
+    return R.success(
+        data={
+            "document_id": result.document_id,
+            "task_id": result.task_id,
+            "source": result.file_name,
+            "chunks_count": result.chunk_count,
+            "status": "COMPLETED",
+        },
+        message=f"文本入库成功，共 {result.chunk_count} 个片段",
+        trace_id=get_trace_id(),
+    )
+
+
+@router.get("/documents", summary="分页查询文档")
+async def list_documents(
+    page: int = Query(default=1, ge=1, description="页码"),
+    page_size: int = Query(default=20, ge=1, le=100, description="每页条数"),
+    user: TokenPayload = Depends(get_current_user),
+):
+    """查询当前租户的文档处理状态与入库统计。"""
+    total, items = await _document_management_service.list_documents(user.tenant_id, page, page_size)
+    return R.success(
+        data=DocumentPageResponse(total=total, page=page, page_size=page_size, items=items).model_dump(mode="json"),
+        trace_id=get_trace_id(),
+    )
+
+
+@router.delete("/documents/{document_id}", summary="删除文档")
+async def delete_document(document_id: str, user: TokenPayload = Depends(get_current_user)):
+    """删除文档原件、元数据、向量切片与 BM25 索引。"""
+    deleted = await _document_management_service.delete_document(
+        tenant_id=user.tenant_id,
+        operator_id=user.user_id,
+        document_id=document_id,
+        trace_id=get_trace_id(),
+    )
+    if not deleted:
+        return R.fail(code=404, message="文档不存在或已删除", trace_id=get_trace_id())
+    return R.success(data={"document_id": document_id}, message="文档已删除", trace_id=get_trace_id())
 
 
 @router.post("/query", summary="知识库问答 (RAG)")
@@ -157,6 +178,7 @@ async def query_knowledge(req: KnowledgeQueryRequest, user: TokenPayload = Depen
 
     # 流式输出
     if req.stream:
+
         async def event_generator():
             try:
                 async for chunk in rag_service.query_stream(req.question):

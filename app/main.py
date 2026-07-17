@@ -35,14 +35,22 @@ async def lifespan(app: FastAPI):
 
     # 初始化 LLM 客户端
     from app.infra.llm.deepseek_client import get_deepseek_client
+
     get_deepseek_client()
 
     # 初始化 Redis（允许失败，降级到内存）
     from app.infra.cache.redis_client import get_redis
+
     await get_redis()
+
+    # 初始化 MySQL 元数据存储并执行版本化迁移
+    from app.infra.database.database import init_database
+
+    await init_database()
 
     # BM25 索引重建：从 Qdrant 恢复内存索引（解决重启后混合检索退化问题）
     from app.service.retrieval.bm25_rebuild import rebuild_bm25_from_qdrant
+
     await rebuild_bm25_from_qdrant()
 
     logger.info("✅ 应用启动完成，监听端口 {}", settings.app_port)
@@ -52,10 +60,15 @@ async def lifespan(app: FastAPI):
     # ---------- 关闭阶段 ----------
     logger.info("🛑 应用关闭中...")
     from app.infra.llm.deepseek_client import deepseek_client
+
     if deepseek_client:
         await deepseek_client.close()
     from app.infra.cache.redis_client import close_redis
+
     await close_redis()
+    from app.infra.database.database import close_database
+
+    await close_database()
     logger.info("👋 应用已优雅关闭")
 
 
@@ -89,6 +102,7 @@ def create_app() -> FastAPI:
 
     # 多租户识别（从 JWT 提取 tenant_id 注入上下文）
     from app.middleware.tenant import TenantMiddleware
+
     app.add_middleware(TenantMiddleware)
 
     # 链路追踪（最先注册 -> 最先执行 -> 全程贯穿）
@@ -102,6 +116,7 @@ def create_app() -> FastAPI:
     from slowapi.errors import RateLimitExceeded
 
     from app.middleware.rate_limit import limiter
+
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 

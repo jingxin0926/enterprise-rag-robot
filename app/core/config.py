@@ -11,6 +11,7 @@
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import quote_plus
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -84,6 +85,15 @@ class AppSettings(BaseSettings):
     redis_db: int = Field(default=0, description="Redis DB")
 
     # ============================================================
+    # MySQL（知识库元数据）
+    # ============================================================
+    mysql_host: str = Field(default="", description="MySQL 地址")
+    mysql_port: int = Field(default=3306, description="MySQL 端口")
+    mysql_user: str = Field(default="smartqa", description="MySQL 应用账号")
+    mysql_password: str = Field(default="", description="MySQL 应用账号密码")
+    mysql_database: str = Field(default="smart_qa", description="MySQL 数据库名")
+
+    # ============================================================
     # Qdrant 向量库
     # ============================================================
     qdrant_url: str = Field(default="", description="Qdrant Server URL，例如 http://qdrant:6333")
@@ -132,6 +142,21 @@ class AppSettings(BaseSettings):
         return f"redis://{password_part}{self.redis_host}:{self.redis_port}/{self.redis_db}"
 
     @property
+    def mysql_enabled(self) -> bool:
+        """是否已配置可用的 MySQL 元数据存储。"""
+        return bool(self.mysql_host and self.mysql_password)
+
+    @property
+    def mysql_url(self) -> str:
+        """构造 SQLAlchemy asyncmy 连接串。"""
+        if not self.mysql_enabled:
+            return ""
+        user = quote_plus(self.mysql_user)
+        password = quote_plus(self.mysql_password)
+        database = quote_plus(self.mysql_database)
+        return f"mysql+asyncmy://{user}:{password}@{self.mysql_host}:{self.mysql_port}/{database}?charset=utf8mb4"
+
+    @property
     def qdrant_server_url(self) -> str:
         """构造 Qdrant Server URL；未配置时返回空字符串，表示使用本地文件模式。"""
         if self.qdrant_url:
@@ -159,17 +184,18 @@ def get_settings() -> AppSettings:
     if _settings.jwt_secret_key == "please-change-this-secret-in-env":
         if _settings.is_prod:
             raise RuntimeError(
-                "🚨 JWT_SECRET_KEY 未配置！生产环境禁止使用默认密钥，"
-                "请在 .env 或环境变量中设置一个强随机字符串。"
+                "🚨 JWT_SECRET_KEY 未配置！生产环境禁止使用默认密钥，请在 .env 或环境变量中设置一个强随机字符串。"
             )
 
     # Fail-fast：生产环境禁止使用默认管理员密码
     if _settings.admin_init_password == "please-change-this-password-in-env":
         if _settings.is_prod:
             raise RuntimeError(
-                "🚨 ADMIN_INIT_PASSWORD 未配置！生产环境禁止使用默认密码，"
-                "请在 .env 或环境变量中设置一个强密码。"
+                "🚨 ADMIN_INIT_PASSWORD 未配置！生产环境禁止使用默认密码，请在 .env 或环境变量中设置一个强密码。"
             )
+
+    if _settings.is_prod and _settings.mysql_host and not _settings.mysql_password:
+        raise RuntimeError("🚨 MYSQL_PASSWORD 未配置！生产环境禁止以空密码连接元数据存储。")
 
     return _settings
 

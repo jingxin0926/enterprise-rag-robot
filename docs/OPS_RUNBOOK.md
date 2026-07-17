@@ -1,6 +1,6 @@
 # Smart QA 线上运行手册
 
-本文适用于单台 ECS 上通过 Docker Compose 部署的 Smart QA System。当前生产拓扑为 Nginx、FastAPI、Redis 和 Qdrant 四个容器，只有 Nginx 的 80/443 端口对外提供服务。
+本文适用于单台 ECS 上通过 Docker Compose 部署的 Smart QA System。当前生产拓扑为 Nginx、FastAPI、MySQL、Redis 和 Qdrant 五个容器，只有 Nginx 的 80/443 端口对外提供服务。
 
 ## 1. 上线基线
 
@@ -20,7 +20,7 @@
 
 ```bash
 docker volume ls | grep '^local'
-docker volume inspect deploy_qdrant-data deploy_redis-data deploy_app-data
+docker volume inspect deploy_qdrant-data deploy_redis-data deploy_app-data deploy_mysql-data
 ```
 
 恢复系统盘快照后，确认 Docker 卷仍存在，再执行健康检查。不得使用 `docker compose down -v`，该命令会删除知识库和缓存卷。
@@ -35,7 +35,7 @@ curl -fsS http://127.0.0.1:8000/api/v1/health
 docker compose --env-file .env -f deploy/docker-compose.yml logs --tail=100 app
 ```
 
-预期四个容器均为 `healthy` 或 `running`，健康检查返回 HTTP 200 且 `data.status` 为 `UP`。
+预期五个容器均为 `healthy` 或 `running`，健康检查返回 HTTP 200 且 `data.status` 为 `UP`。
 
 ## 3. 发布与回滚
 
@@ -68,7 +68,7 @@ docker compose --env-file .env -f deploy/docker-compose.yml up -d --build
 | --- | --- |
 | 页面不可访问 | ECS 安全组 80/443、Nginx 容器状态、`docker compose ps` |
 | `/api` 返回 502 | 应用容器日志、`curl 127.0.0.1:8000/api/v1/health`、Redis/Qdrant 状态 |
-| 上传或问答失败 | 应用日志、DeepSeek API Key、磁盘空间、Embedding 模型下载网络 |
+| 上传或问答失败 | 应用日志、DeepSeek API Key、MySQL 状态、磁盘空间、Embedding 模型下载网络 |
 | 服务重启后检索变差 | 应用启动日志中的 BM25 重建、Qdrant 卷是否仍存在 |
 
 排查命令：

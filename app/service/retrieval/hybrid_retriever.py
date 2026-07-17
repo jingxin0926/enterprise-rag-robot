@@ -25,10 +25,10 @@ from app.service.retrieval.reranker import Reranker
 class HybridResult:
     """混合检索结果（单条）"""
 
-    content: str                                     # 检索到的文档片段内容
-    score: float                                     # 相关性分数（RRF融合后）
-    metadata: dict = field(default_factory=dict)     # 元数据（来源文件名、片段索引等）
-    source_type: str = ""                            # 检索来源："vector"(向量) / "bm25"(关键词) / "hybrid"(融合)
+    content: str  # 检索到的文档片段内容
+    score: float  # 相关性分数（RRF融合后）
+    metadata: dict = field(default_factory=dict)  # 元数据（来源文件名、片段索引等）
+    source_type: str = ""  # 检索来源："vector"(向量) / "bm25"(关键词) / "hybrid"(融合)
 
 
 class HybridRetriever:
@@ -64,6 +64,10 @@ class HybridRetriever:
         注意：向量库已在 upload 时写入，这里主要同步 BM25
         """
         self._bm25.add_documents(texts, metadatas)
+
+    def remove_by_document_id(self, document_id: str) -> int:
+        """从关键词索引移除已删除文档的切片。"""
+        return self._bm25.remove_by_document_id(document_id)
 
     def _rrf_fusion(
         self,
@@ -168,7 +172,7 @@ class HybridRetriever:
 
         # 3. Rerank 精排（如果启用）
         if self._reranker and len(fused) > 1:
-            candidates = fused[:rerank_top_k * 2]  # 多取一些送去精排
+            candidates = fused[: rerank_top_k * 2]  # 多取一些送去精排
             reranked = self._reranker.rerank(
                 query=query,
                 documents=[r.content for r in candidates],
@@ -206,6 +210,7 @@ def get_hybrid_retriever(collection_name: str | None = None) -> HybridRetriever:
     不传 collection_name 时，自动使用当前请求的租户 collection。
     """
     from app.core.tenant import get_tenant_collection_name
+
     name = collection_name or get_tenant_collection_name()
     if name not in _hybrid_retrievers:
         _hybrid_retrievers[name] = HybridRetriever(collection_name=name)

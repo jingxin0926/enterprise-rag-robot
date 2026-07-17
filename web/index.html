@@ -131,6 +131,33 @@
                 </dl>
               </section>
             </div>
+
+            <section class="panel document-panel">
+              <div class="panel-header">
+                <div>
+                  <h2>文档处理记录</h2>
+                  <span id="document-summary">暂无文档</span>
+                </div>
+                <button id="documents-refresh-btn" class="ghost-btn" type="button">刷新</button>
+              </div>
+              <div class="table-wrap">
+                <table class="document-table">
+                  <thead>
+                    <tr>
+                      <th>文档</th>
+                      <th>状态</th>
+                      <th>片段</th>
+                      <th>大小</th>
+                      <th>更新时间</th>
+                      <th aria-label="操作"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="document-list">
+                    <tr><td class="table-empty" colspan="6">暂无文档</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
           </section>
         </section>
       </main>

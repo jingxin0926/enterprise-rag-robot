@@ -85,6 +85,27 @@ class BM25Retriever:
         if texts:
             self.add_documents(texts, metadatas)
 
+    def remove_by_document_id(self, document_id: str) -> int:
+        """删除指定文档的内存切片并重建 BM25 索引。"""
+        retained = [
+            (text, metadata)
+            for text, metadata in zip(self._documents, self._metadatas, strict=True)
+            if metadata.get("document_id") != document_id
+        ]
+        removed_count = len(self._documents) - len(retained)
+        if not removed_count:
+            return 0
+
+        self._documents = []
+        self._metadatas = []
+        self._tokenized_corpus = []
+        self._bm25 = None
+        if retained:
+            texts, metadatas = zip(*retained, strict=True)
+            self.add_documents(list(texts), list(metadatas))
+        logger.info("[BM25] 删除文档切片 | document_id={} count={}", document_id, removed_count)
+        return removed_count
+
     def search(self, query: str, top_k: int = 5) -> list[BM25Result]:
         """
         BM25 检索
@@ -106,9 +127,7 @@ class BM25Retriever:
         scores = self._bm25.get_scores(tokenized_query)
 
         # 按分数排序取 Top-K
-        scored_indices = sorted(
-            enumerate(scores), key=lambda x: x[1], reverse=True
-        )[:top_k]
+        scored_indices = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)[:top_k]
 
         results = []
         for idx, score in scored_indices:

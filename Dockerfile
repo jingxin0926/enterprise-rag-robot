@@ -28,6 +28,9 @@ COPY --from=builder /app/.venv /app/.venv
 # 拷贝应用代码
 COPY app/ ./app/
 
+# 拷贝版本化 DDL，应用启动时执行尚未应用的迁移
+COPY db/ ./db/
+
 # 设置环境变量
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1

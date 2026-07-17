@@ -126,6 +126,69 @@ async function refreshKnowledgeInfo() {
   setText("#collection-status", data.status || "-");
 }
 
+function formatFileSize(size) {
+  if (!Number.isFinite(Number(size)) || Number(size) <= 0) return "-";
+  const bytes = Number(size);
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString("zh-CN", { hour12: false });
+}
+
+function renderDocuments(items, total) {
+  const body = $("#document-list");
+  body.innerHTML = "";
+  setText("#document-summary", total > 0 ? `共 ${total} 个文档` : "暂无文档");
+
+  if (!Array.isArray(items) || items.length === 0) {
+    body.innerHTML = '<tr><td class="table-empty" colspan="6">暂无文档</td></tr>';
+    return;
+  }
+
+  items.forEach((item) => {
+    const row = document.createElement("tr");
+    const status = item.status || "UNKNOWN";
+    const error = item.error_message ? `<p class="document-error">${escapeHtml(item.error_message)}</p>` : "";
+    row.innerHTML = `
+      <td><strong>${escapeHtml(item.file_name || "未命名文档")}</strong>${error}</td>
+      <td><span class="status-badge status-${escapeHtml(status.toLowerCase())}">${escapeHtml(status)}</span></td>
+      <td>${Number(item.chunk_count || 0)}</td>
+      <td>${formatFileSize(item.file_size)}</td>
+      <td>${formatTime(item.update_time)}</td>
+      <td><button class="danger-btn" data-document-id="${escapeHtml(item.id)}" type="button">删除</button></td>
+    `;
+    body.appendChild(row);
+  });
+}
+
+async function refreshDocuments() {
+  const payload = await api("/knowledge/documents?page=1&page_size=50");
+  const data = payload.data || {};
+  renderDocuments(data.items || [], Number(data.total || 0));
+}
+
+async function deleteDocument(event) {
+  const button = event.target.closest("[data-document-id]");
+  if (!button) return;
+  if (!window.confirm("删除后将同时移除原文件、向量切片和检索索引，确认继续？")) return;
+
+  const restore = setLoading(button, "删除中");
+  try {
+    await api(`/knowledge/documents/${encodeURIComponent(button.dataset.documentId)}`, { method: "DELETE" });
+    await Promise.all([refreshDocuments(), refreshKnowledgeInfo()]);
+    showToast("文档已删除");
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    restore();
+  }
+}
+
 async function login(event) {
   event.preventDefault();
   const restore = setLoading(event.submitter, "登录中");
@@ -148,7 +211,7 @@ async function login(event) {
     localStorage.setItem("smart_qa_token", state.token);
     localStorage.setItem("smart_qa_user", JSON.stringify(state.user));
     syncAuthView();
-    await Promise.all([refreshHealth(), refreshKnowledgeInfo()]);
+    await Promise.all([refreshHealth(), refreshKnowledgeInfo(), refreshDocuments()]);
     showToast("登录成功");
   } catch (error) {
     showToast(error.message);
@@ -192,7 +255,7 @@ async function uploadDocuments(event) {
         appendLog(`${file.name}: ${error.message}`, "error");
       }
     }
-    await refreshKnowledgeInfo();
+    await Promise.all([refreshKnowledgeInfo(), refreshDocuments()]);
   } finally {
     restore();
   }
@@ -252,6 +315,9 @@ function switchView(event) {
   document.querySelectorAll(".view").forEach((view) => view.classList.remove("active"));
   button.classList.add("active");
   $(`#${button.dataset.view}`).classList.add("active");
+  if (button.dataset.view === "knowledge-view" && state.token) {
+    refreshDocuments().catch((error) => showToast(error.message));
+  }
 }
 
 function bindEvents() {
@@ -259,6 +325,8 @@ function bindEvents() {
   $("#logout-btn").addEventListener("click", logout);
   $("#health-btn").addEventListener("click", refreshHealth);
   $("#knowledge-info-btn").addEventListener("click", refreshKnowledgeInfo);
+  $("#documents-refresh-btn").addEventListener("click", () => refreshDocuments().catch((error) => showToast(error.message)));
+  $("#document-list").addEventListener("click", deleteDocument);
   $("#upload-form").addEventListener("submit", uploadDocuments);
   $("#question-form").addEventListener("submit", askQuestion);
   $("#new-session-btn").addEventListener("click", newSession);
@@ -268,4 +336,7 @@ function bindEvents() {
 bindEvents();
 syncAuthView();
 refreshHealth();
-if (state.token) refreshKnowledgeInfo();
+if (state.token) {
+  refreshKnowledgeInfo();
+  refreshDocuments().catch(() => {});
+}

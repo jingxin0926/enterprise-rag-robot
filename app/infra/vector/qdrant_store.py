@@ -15,7 +15,16 @@ from pathlib import Path
 
 from loguru import logger
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, PointStruct, VectorParams
+from qdrant_client.models import (
+    Distance,
+    FieldCondition,
+    Filter,
+    FilterSelector,
+    MatchValue,
+    PointIdsList,
+    PointStruct,
+    VectorParams,
+)
 
 from app.core.config import PROJECT_ROOT, settings
 from app.core.tenant import get_tenant_collection_name
@@ -36,9 +45,9 @@ DEFAULT_COLLECTION = "knowledge_base"
 class SearchResult:
     """向量检索结果（单条）"""
 
-    content: str                                     # 检索到的文档片段内容
-    score: float                                     # 向量相似度分数（0-1，越高越相关）
-    metadata: dict = field(default_factory=dict)     # 元数据（来源文件名、片段索引、入库时间等）
+    content: str  # 检索到的文档片段内容
+    score: float  # 向量相似度分数（0-1，越高越相关）
+    metadata: dict = field(default_factory=dict)  # 元数据（来源文件名、片段索引、入库时间等）
 
 
 class QdrantStore:
@@ -194,6 +203,28 @@ class QdrantStore:
         """删除集合（慎用）"""
         self._client.delete_collection(self._collection_name)
         logger.warning("[Qdrant] 删除集合 | name={}", self._collection_name)
+
+    def delete_points(self, point_ids: list[str]) -> None:
+        """按向量点 ID 删除，供入库补偿事务使用。"""
+        if not point_ids:
+            return
+        self._client.delete(
+            collection_name=self._collection_name,
+            points_selector=PointIdsList(points=point_ids),
+            wait=True,
+        )
+        logger.info("[Qdrant] 删除向量点 | collection={} count={}", self._collection_name, len(point_ids))
+
+    def delete_by_document_id(self, document_id: str) -> None:
+        """按文档关联键删除所有向量切片。"""
+        self._client.delete(
+            collection_name=self._collection_name,
+            points_selector=FilterSelector(
+                filter=Filter(must=[FieldCondition(key="document_id", match=MatchValue(value=document_id))])
+            ),
+            wait=True,
+        )
+        logger.info("[Qdrant] 删除文档向量 | collection={} document_id={}", self._collection_name, document_id)
 
 
 # 按 collection 名称缓存实例（多租户各自持有独立实例）

@@ -383,6 +383,97 @@ textarea:focus {
   gap: 18px;
 }
 
+.document-panel {
+  margin-top: 18px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.document-table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.document-table th,
+.document-table td {
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.document-table th {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.document-table td:first-child {
+  min-width: 220px;
+}
+
+.table-empty {
+  color: var(--muted);
+  text-align: center !important;
+}
+
+.status-badge {
+  display: inline-block;
+  min-width: 78px;
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: #eef2f6;
+  color: #475467;
+  font-size: 12px;
+  text-align: center;
+}
+
+.status-completed {
+  background: #eaf7ee;
+  color: var(--success);
+}
+
+.status-failed {
+  background: #fff0ee;
+  color: var(--danger);
+}
+
+.status-parsing,
+.status-chunking,
+.status-indexing,
+.status-uploaded,
+.status-pending,
+.status-running {
+  background: #e8f1ff;
+  color: var(--primary-strong);
+}
+
+.document-error {
+  max-width: 360px;
+  margin: 5px 0 0;
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.danger-btn {
+  height: 32px;
+  border: 1px solid #f3b5ad;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.danger-btn:hover {
+  background: #fff4f2;
+}
+
 .log-list {
   display: grid;
   gap: 8px;

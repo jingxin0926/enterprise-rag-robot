@@ -22,6 +22,11 @@ services:
       - DEEPSEEK_MODEL=deepseek-chat
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=${MYSQL_USER:-smartqa}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-smart_qa}
       - QDRANT_URL=http://qdrant:6333
       - QDRANT_API_KEY=${QDRANT_API_KEY:-}
       - HF_ENDPOINT=https://hf-mirror.com
@@ -33,6 +38,8 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_started
+      mysql:
+        condition: service_healthy
     restart: unless-stopped
     deploy:
       resources:
@@ -67,6 +74,25 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # ==================== MySQL 元数据存储 ====================
+  mysql:
+    image: mysql:8.0
+    container_name: smart-qa-mysql
+    environment:
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-smart_qa}
+      - MYSQL_USER=${MYSQL_USER:-smartqa}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
   # ==================== Qdrant 向量库 ====================
   qdrant:
     image: qdrant/qdrant:v1.12.6
@@ -83,3 +109,4 @@ volumes:
   app-logs:
   redis-data:
   qdrant-data:
+  mysql-data:

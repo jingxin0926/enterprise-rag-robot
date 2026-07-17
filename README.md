@@ -56,6 +56,7 @@
 | 向量库 | Qdrant |
 | 全文检索 | rank-bm25 + jieba 分词 |
 | 文本切分 | langchain-text-splitters (RecursiveCharacterTextSplitter) |
+| 业务元数据 | MySQL 8.0 |
 | 缓存 | Redis 7 |
 | 鉴权 | PyJWT + bcrypt |
 | 限流 | slowapi |
@@ -149,6 +150,8 @@ docker compose --env-file .env -f deploy/docker-compose.yml up -d --build
 curl http://localhost:8000/api/v1/health
 ```
 
+生产部署还需在 `.env` 中配置 `MYSQL_PASSWORD` 和 `MYSQL_ROOT_PASSWORD`。MySQL 仅在 Docker 内网开放，保存知识库、文档、入库任务、切片元数据与操作审计；Qdrant 仅保存向量和检索 payload。
+
 部署完成后：
 
 - 前端页面：`http://服务器公网IP/`
@@ -176,6 +179,8 @@ QDRANT_API_KEY=your-qdrant-api-key
 | `/api/v1/auth/me` | GET | ✅ | 当前用户信息 |
 | `/api/v1/agent/chat` | POST | ✅ | 智能对话（统一入口） |
 | `/api/v1/knowledge/upload` | POST | ✅ | 上传文档到知识库 |
+| `/api/v1/knowledge/documents` | GET | ✅ | 分页查询文档处理状态 |
+| `/api/v1/knowledge/documents/{document_id}` | DELETE | ✅ | 删除文档及其向量切片 |
 | `/api/v1/knowledge/query` | POST | ✅ | 知识库 RAG 问答 |
 | `/api/v1/knowledge/info` | GET | ✅ | 知识库信息 |
 | `/api/v1/eval/single` | POST | - | 单条 RAG 质量评测 |
