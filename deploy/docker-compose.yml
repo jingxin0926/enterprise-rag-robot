@@ -136,8 +136,8 @@ services:
 
   # ==================== Qdrant 向量库 ====================
   qdrant:
-    # 与 uv.lock 中 qdrant-client 1.18.0 对齐，避免客户端/服务端协议兼容性风险。
-    image: qdrant/qdrant:v1.18.0
+    # 存量数据由 1.12 创建；升级 Qdrant 前必须先完成官方支持的存储迁移。
+    image: qdrant/qdrant:v1.12.6
     container_name: smart-qa-qdrant
     environment:
       - QDRANT__SERVICE__API_KEY=${QDRANT_API_KEY:?QDRANT_API_KEY must be set}
