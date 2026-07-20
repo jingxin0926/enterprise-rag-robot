@@ -117,10 +117,15 @@ class AppSettings(BaseSettings):
         description="向量召回最低相似度，低于该值的片段不进入混合检索",
     )
     rag_strong_vector_score: float = Field(
-        default=0.6,
+        default=0.72,
         ge=0,
         le=1,
         description="单路向量证据可直接回答的强相似度阈值",
+    )
+    rag_min_bm25_score: float = Field(
+        default=1.0,
+        ge=0,
+        description="双路证据成立所需的最低 BM25 分数，过滤通用词命中",
     )
 
     # ============================================================

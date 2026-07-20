@@ -64,6 +64,7 @@ class RAGService:
         self._top_k = top_k
         self._score_threshold = score_threshold if score_threshold is not None else settings.rag_vector_score_threshold
         self._strong_vector_score = settings.rag_strong_vector_score
+        self._minimum_bm25_score = settings.rag_min_bm25_score
         self._use_hybrid = use_hybrid
         self._use_rewrite = use_rewrite
         self._use_semantic_cache = use_semantic_cache
@@ -143,17 +144,29 @@ class RAGService:
     def _filter_sufficient_evidence(self, results: list[HybridResult]) -> list[HybridResult]:
         """只保留双路一致或高语义相似度证据，避免无依据生成。"""
         accepted: list[HybridResult] = []
+        candidate_diagnostics: list[dict] = []
         for result in results:
-            dual_retrieval = result.vector_score is not None and result.bm25_score is not None
+            bm25_qualified = result.bm25_score is not None and result.bm25_score >= self._minimum_bm25_score
+            dual_retrieval = result.vector_score is not None and bm25_qualified
             strong_vector = result.vector_score is not None and result.vector_score >= self._strong_vector_score
             if dual_retrieval or strong_vector:
                 accepted.append(result)
+            candidate_diagnostics.append(
+                {
+                    "source": result.metadata.get("source", "unknown"),
+                    "vector": round(result.vector_score, 4) if result.vector_score is not None else None,
+                    "bm25": round(result.bm25_score, 4) if result.bm25_score is not None else None,
+                    "accepted": dual_retrieval or strong_vector,
+                }
+            )
 
         logger.info(
-            "[RAG-EvidenceGate] retrieved={} accepted={} strong_vector_threshold={}",
+            "[RAG-EvidenceGate] retrieved={} accepted={} strong_vector_threshold={} min_bm25_score={} candidates={}",
             len(results),
             len(accepted),
             self._strong_vector_score,
+            self._minimum_bm25_score,
+            candidate_diagnostics,
         )
         return accepted
 

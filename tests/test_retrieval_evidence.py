@@ -23,17 +23,19 @@ def test_rrf_fusion_preserves_raw_retrieval_scores() -> None:
     assert results[0].rrf_score == results[0].score
 
 
-def test_evidence_gate_requires_dual_retrieval_or_strong_vector() -> None:
-    """弱单路候选不能进入生成上下文，双路和强向量候选可以。"""
+def test_evidence_gate_requires_quality_bm25_or_strong_vector() -> None:
+    """弱 BM25 通用词命中不能成为证据，高质量双路和强向量候选可以。"""
     rag_service = RAGService.__new__(RAGService)
-    rag_service._strong_vector_score = 0.6
+    rag_service._strong_vector_score = 0.72
+    rag_service._minimum_bm25_score = 1.0
 
     accepted = rag_service._filter_sufficient_evidence(
         [
             HybridResult(content="弱单路", score=0.01, vector_score=0.42),
-            HybridResult(content="双路", score=0.02, vector_score=0.44, bm25_score=1.1),
-            HybridResult(content="强向量", score=0.01, vector_score=0.71),
+            HybridResult(content="通用词双路", score=0.02, vector_score=0.44, bm25_score=0.3),
+            HybridResult(content="高质量双路", score=0.02, vector_score=0.44, bm25_score=1.1),
+            HybridResult(content="强向量", score=0.01, vector_score=0.75),
         ]
     )
 
-    assert [item.content for item in accepted] == ["双路", "强向量"]
+    assert [item.content for item in accepted] == ["高质量双路", "强向量"]
