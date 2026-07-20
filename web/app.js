@@ -186,7 +186,8 @@ async function refreshDocuments() {
 function startDocumentPolling() {
   if (documentPollTimer) return;
   documentPollTimer = window.setInterval(() => {
-    refreshDocuments().catch(() => {});
+    // 入库完成时文档状态与 Qdrant 点数会同时变化，必须按同一轮询周期刷新。
+    Promise.all([refreshDocuments(), refreshKnowledgeInfo()]).catch(() => {});
   }, 3000);
 }
 
