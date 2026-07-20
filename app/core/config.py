@@ -108,6 +108,22 @@ class AppSettings(BaseSettings):
     qdrant_local_path: str = Field(default="data/qdrant_storage", description="本地 Qdrant 文件存储路径")
 
     # ============================================================
+    # RAG 检索质量门禁
+    # ============================================================
+    rag_vector_score_threshold: float = Field(
+        default=0.3,
+        ge=0,
+        le=1,
+        description="向量召回最低相似度，低于该值的片段不进入混合检索",
+    )
+    rag_strong_vector_score: float = Field(
+        default=0.6,
+        ge=0,
+        le=1,
+        description="单路向量证据可直接回答的强相似度阈值",
+    )
+
+    # ============================================================
     # 安全 / JWT
     # ============================================================
     jwt_secret_key: str = Field(

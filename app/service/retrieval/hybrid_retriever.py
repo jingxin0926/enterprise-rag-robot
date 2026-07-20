@@ -29,6 +29,9 @@ class HybridResult:
     score: float  # 相关性分数（RRF融合后）
     metadata: dict = field(default_factory=dict)  # 元数据（来源文件名、片段索引等）
     source_type: str = ""  # 检索来源："vector"(向量) / "bm25"(关键词) / "hybrid"(融合)
+    vector_score: float | None = None  # 原始向量相似度，用于证据门禁
+    bm25_score: float | None = None  # 原始 BM25 分数，用于判断双路一致性
+    rrf_score: float | None = None  # RRF 融合分，仅用于排序而非置信度判断
 
 
 class HybridRetriever:
@@ -90,35 +93,45 @@ class HybridRetriever:
         """
         # 用 content 作为去重键
         scores: dict[str, float] = {}
-        content_map: dict[str, dict] = {}  # content -> metadata
+        content_map: dict[str, dict] = {}  # content -> metadata / 多路原始分数
 
         # 向量检索贡献
         for rank, result in enumerate(vector_results):
             content = result.content
             rrf_score = self._vector_weight / (k + rank + 1)
             scores[content] = scores.get(content, 0) + rrf_score
-            if content not in content_map:
-                content_map[content] = result.metadata
+            details = content_map.setdefault(
+                content,
+                {"metadata": result.metadata, "vector_score": None, "bm25_score": None},
+            )
+            details["vector_score"] = result.score
 
         # BM25 贡献
         for rank, result in enumerate(bm25_results):
             content = result.content
             rrf_score = self._bm25_weight / (k + rank + 1)
             scores[content] = scores.get(content, 0) + rrf_score
-            if content not in content_map:
-                content_map[content] = result.metadata
+            details = content_map.setdefault(
+                content,
+                {"metadata": result.metadata, "vector_score": None, "bm25_score": None},
+            )
+            details["bm25_score"] = result.score
 
         # 按融合分数排序
         sorted_items = sorted(scores.items(), key=lambda x: x[1], reverse=True)
 
         results = []
         for content, score in sorted_items:
+            details = content_map[content]
             results.append(
                 HybridResult(
                     content=content,
                     score=score,
-                    metadata=content_map.get(content, {}),
+                    metadata=details["metadata"],
                     source_type="hybrid",
+                    vector_score=details["vector_score"],
+                    bm25_score=details["bm25_score"],
+                    rrf_score=score,
                 )
             )
 
@@ -173,6 +186,7 @@ class HybridRetriever:
         # 3. Rerank 精排（如果启用）
         if self._reranker and len(fused) > 1:
             candidates = fused[: rerank_top_k * 2]  # 多取一些送去精排
+            candidate_by_content = {candidate.content: candidate for candidate in candidates}
             reranked = self._reranker.rerank(
                 query=query,
                 documents=[r.content for r in candidates],
@@ -185,6 +199,9 @@ class HybridRetriever:
                     score=r.score,
                     metadata=r.metadata,
                     source_type="hybrid+rerank",
+                    vector_score=candidate_by_content[r.content].vector_score,
+                    bm25_score=candidate_by_content[r.content].bm25_score,
+                    rrf_score=candidate_by_content[r.content].rrf_score,
                 )
                 for r in reranked
             ]

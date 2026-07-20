@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 
 from loguru import logger
 
+from app.core.config import settings
 from app.infra.llm.deepseek_client import ChatMessage, get_deepseek_client
 from app.infra.vector.qdrant_store import get_qdrant_store
 from app.prompts.loader import get_prompt_loader
@@ -54,14 +55,15 @@ class RAGService:
     def __init__(
         self,
         top_k: int = 5,
-        score_threshold: float = 0.3,
+        score_threshold: float | None = None,
         use_hybrid: bool = True,
         use_rewrite: bool = True,
         use_rerank: bool = True,
         use_semantic_cache: bool = True,
     ) -> None:
         self._top_k = top_k
-        self._score_threshold = score_threshold
+        self._score_threshold = score_threshold if score_threshold is not None else settings.rag_vector_score_threshold
+        self._strong_vector_score = settings.rag_strong_vector_score
         self._use_hybrid = use_hybrid
         self._use_rewrite = use_rewrite
         self._use_semantic_cache = use_semantic_cache
@@ -92,6 +94,9 @@ class RAGService:
                 "score": round(r.score, 4),
                 "chunk_index": r.metadata.get("chunk_index", 0),
                 "retrieval_type": r.source_type,
+                "vector_score": round(r.vector_score, 4) if r.vector_score is not None else None,
+                "bm25_score": round(r.bm25_score, 4) if r.bm25_score is not None else None,
+                "rrf_score": round(r.rrf_score, 4) if r.rrf_score is not None else None,
             })
 
         return "\n\n".join(context_parts), sources
@@ -128,11 +133,29 @@ class RAGService:
                     score=r.score,
                     metadata=r.metadata,
                     source_type="vector",
+                    vector_score=r.score,
                 )
                 for r in vector_results
             ]
 
         return results, rewritten
+
+    def _filter_sufficient_evidence(self, results: list[HybridResult]) -> list[HybridResult]:
+        """只保留双路一致或高语义相似度证据，避免无依据生成。"""
+        accepted: list[HybridResult] = []
+        for result in results:
+            dual_retrieval = result.vector_score is not None and result.bm25_score is not None
+            strong_vector = result.vector_score is not None and result.vector_score >= self._strong_vector_score
+            if dual_retrieval or strong_vector:
+                accepted.append(result)
+
+        logger.info(
+            "[RAG-EvidenceGate] retrieved={} accepted={} strong_vector_threshold={}",
+            len(results),
+            len(accepted),
+            self._strong_vector_score,
+        )
+        return accepted
 
     async def query(self, question: str) -> RAGResponse:
         """RAG 问答（非流式）"""
@@ -170,7 +193,8 @@ class RAGService:
         )
 
         # 2. 组装上下文
-        context, sources = self._build_context(results)
+        evidence_results = self._filter_sufficient_evidence(results)
+        context, sources = self._build_context(evidence_results)
 
         if not context:
             tracer.end()
@@ -216,7 +240,7 @@ class RAGService:
             "[RAG-P3] 问答完成 | question='{}...' rewritten='{}...' hits={} tokens={}",
             question[:20],
             rewritten[:20],
-            len(results),
+            len(evidence_results),
             response.total_tokens,
         )
 
@@ -237,7 +261,8 @@ class RAGService:
         results, rewritten = await self._retrieve(question)
 
         # 2. 组装上下文
-        context, sources = self._build_context(results)
+        evidence_results = self._filter_sufficient_evidence(results)
+        context, sources = self._build_context(evidence_results)
 
         if not context:
             yield "抱歉，知识库中暂未找到与您问题相关的内容。请尝试换个说法，或确认相关文档是否已上传。"
