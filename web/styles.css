@@ -179,7 +179,21 @@ button {
 
 .panel-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
+}
+
+.evaluation-panel {
+  margin-bottom: 18px;
+}
+
+.evaluation-metrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.status-failed {
+  background: #fef3f2;
+  color: var(--danger);
 }
 
 .panel-header span {

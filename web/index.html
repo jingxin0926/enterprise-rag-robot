@@ -20,6 +20,7 @@
         <nav class="nav">
           <button class="nav-item active" data-view="qa-view" type="button">问答工作台</button>
           <button class="nav-item" data-view="knowledge-view" type="button">知识库管理</button>
+          <button class="nav-item" data-view="evaluation-view" type="button">质量评测</button>
         </nav>
 
         <div class="side-status">
@@ -157,6 +158,55 @@
                   </thead>
                   <tbody id="document-list">
                     <tr><td class="table-empty" colspan="6">暂无文档</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+
+          <section id="evaluation-view" class="view">
+            <section class="panel evaluation-panel">
+              <div class="panel-header">
+                <div>
+                  <h2>RAG 回归评测</h2>
+                  <span id="evaluation-summary">尚未执行</span>
+                </div>
+                <div class="panel-actions">
+                  <label class="inline-control" for="evaluation-limit">
+                    执行条数
+                    <input id="evaluation-limit" type="number" min="1" max="50" value="5" />
+                  </label>
+                  <button id="run-evaluation-btn" class="primary-btn" type="button">执行评测</button>
+                </div>
+              </div>
+              <dl class="metric-list evaluation-metrics">
+                <div><dt>题目总数</dt><dd id="evaluation-total">-</dd></div>
+                <div><dt>来源精确匹配</dt><dd id="evaluation-source-exact">-</dd></div>
+                <div><dt>来源召回率</dt><dd id="evaluation-source-recall">-</dd></div>
+                <div><dt>事实覆盖率</dt><dd id="evaluation-fact-coverage">-</dd></div>
+                <div><dt>拒答准确率</dt><dd id="evaluation-refusal">-</dd></div>
+                <div><dt>平均耗时</dt><dd id="evaluation-latency">-</dd></div>
+              </dl>
+            </section>
+
+            <section class="panel document-panel">
+              <div class="panel-header">
+                <h2>评测明细</h2>
+              </div>
+              <div class="table-wrap">
+                <table class="document-table">
+                  <thead>
+                    <tr>
+                      <th>用例</th>
+                      <th>类型</th>
+                      <th>来源匹配</th>
+                      <th>事实覆盖</th>
+                      <th>拒答</th>
+                      <th>耗时</th>
+                    </tr>
+                  </thead>
+                  <tbody id="evaluation-result-list">
+                    <tr><td class="table-empty" colspan="6">尚未执行评测</td></tr>
                   </tbody>
                 </table>
               </div>

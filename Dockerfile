@@ -31,6 +31,9 @@ COPY app/ ./app/
 # 拷贝版本化 DDL，应用启动时执行尚未应用的迁移
 COPY db/ ./db/
 
+# 将版本化评测题库打入运行镜像，生产环境可直接执行回归评测。
+COPY docs/evaluation/ ./docs/evaluation/
+
 # 设置环境变量
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1

@@ -1,0 +1,2 @@
+{"id":"known-001","category":"single_document","question":"创建接口是什么？","expected_sources":["需求.md"],"expected_answer_points":["/pms/demand/create"],"should_refuse":false}
+{"id":"refusal-001","category":"refusal","question":"年假几天？","expected_sources":[],"expected_answer_points":[],"should_refuse":true}

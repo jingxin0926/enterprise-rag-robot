@@ -38,6 +38,8 @@ class RAGResponse:
     total_tokens: int = 0                                # 总消耗 token 数
     rewritten_query: str = ""                            # Query 改写后的检索语句
     retrieval_mode: str = "hybrid"                       # 检索模式："vector"(纯向量) / "hybrid"(混合检索)
+    answer_status: str = "ANSWERED"                       # ANSWERED / INSUFFICIENT_EVIDENCE / CACHED
+    evidence_count: int = 0                               # 参与生成的去重证据片段数
 
 
 class RAGService:
@@ -56,11 +58,13 @@ class RAGService:
         use_hybrid: bool = True,
         use_rewrite: bool = True,
         use_rerank: bool = True,
+        use_semantic_cache: bool = True,
     ) -> None:
         self._top_k = top_k
         self._score_threshold = score_threshold
         self._use_hybrid = use_hybrid
         self._use_rewrite = use_rewrite
+        self._use_semantic_cache = use_semantic_cache
         self._llm = get_deepseek_client()
         self._rewriter = QueryRewriter() if use_rewrite else None
         self._hybrid = get_hybrid_retriever() if use_hybrid else None
@@ -142,7 +146,7 @@ class RAGService:
 
         # 0. 先查语义缓存（命中则直接返回，不调 LLM）
         cache = get_semantic_cache()
-        cache_hit = cache.lookup(question)
+        cache_hit = cache.lookup(question) if self._use_semantic_cache else None
         if cache_hit:
             tracer.end()
             return RAGResponse(
@@ -150,6 +154,7 @@ class RAGService:
                 sources=[{"source": "semantic_cache", "score": cache_hit.score}],
                 rewritten_query="",
                 retrieval_mode="cache_hit",
+                answer_status="CACHED",
             )
 
         # 1. 检索
@@ -173,6 +178,7 @@ class RAGService:
                 answer="抱歉，知识库中暂未找到与您问题相关的内容。请尝试换个说法，或确认相关文档是否已上传。",
                 sources=[],
                 rewritten_query=rewritten,
+                answer_status="INSUFFICIENT_EVIDENCE",
             )
 
         # 3. 构建消息（从 Prompt 文件加载系统提示词，注入检索上下文）
@@ -203,7 +209,8 @@ class RAGService:
         tracer.end()
 
         # 存入语义缓存（下次相似问题直接命中）
-        cache.store(question, response.content)
+        if self._use_semantic_cache:
+            cache.store(question, response.content)
 
         logger.info(
             "[RAG-P3] 问答完成 | question='{}...' rewritten='{}...' hits={} tokens={}",
@@ -221,6 +228,7 @@ class RAGService:
             total_tokens=response.total_tokens,
             rewritten_query=rewritten,
             retrieval_mode="hybrid" if self._use_hybrid else "vector",
+            evidence_count=len(sources),
         )
 
     async def query_stream(self, question: str) -> AsyncGenerator[str, None]:

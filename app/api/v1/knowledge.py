@@ -239,6 +239,8 @@ async def query_knowledge(req: KnowledgeQueryRequest, user: TokenPayload = Depen
             "prompt_tokens": result.prompt_tokens,
             "completion_tokens": result.completion_tokens,
             "total_tokens": result.total_tokens,
+            "answer_status": result.answer_status,
+            "evidence_count": result.evidence_count,
         },
         trace_id=get_trace_id(),
     )

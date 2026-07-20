@@ -6,12 +6,13 @@ RAG 评测接口
 2. POST /api/v1/eval/rag      — 端到端评测（输入问题 → 自动检索+生成+评分）
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.api.deps import get_current_user
 from app.core.response import R
 from app.core.security import TokenPayload
+from app.service.dataset_eval_service import DatasetEvalService
 from app.service.eval_service import EvalService
 from app.service.rag_service import RAGService
 
@@ -19,7 +20,6 @@ router = APIRouter(prefix="/eval", tags=["评测"])
 
 # 服务实例
 _eval_service = EvalService()
-_rag_service = RAGService()
 
 
 class SingleEvalRequest(BaseModel):
@@ -36,8 +36,21 @@ class RAGEvalRequest(BaseModel):
     questions: list[str] = Field(..., description="待评测的问题列表", min_length=1, max_length=20)
 
 
+class DatasetEvalRequest(BaseModel):
+    """版本化题库评测请求。"""
+
+    limit: int | None = Field(default=None, ge=1, le=50, description="最多执行多少条题库用例")
+
+
+def require_admin(user: TokenPayload = Depends(get_current_user)) -> TokenPayload:
+    """限制消耗模型配额的评测接口仅供管理员执行。"""
+    if user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅管理员可执行评测任务")
+    return user
+
+
 @router.post("/single", summary="单条 RAG 质量评测")
-async def eval_single(req: SingleEvalRequest, user: TokenPayload = Depends(get_current_user)):
+async def eval_single(req: SingleEvalRequest, user: TokenPayload = Depends(require_admin)):
     """
     对一条 RAG 输出进行三维度评分：
     - Faithfulness（忠实度）：回答是否基于参考资料
@@ -63,7 +76,7 @@ async def eval_single(req: SingleEvalRequest, user: TokenPayload = Depends(get_c
 
 
 @router.post("/rag", summary="端到端 RAG 评测")
-async def eval_rag(req: RAGEvalRequest, user: TokenPayload = Depends(get_current_user)):
+async def eval_rag(req: RAGEvalRequest, user: TokenPayload = Depends(require_admin)):
     """
     端到端评测流程：
     1. 对每个问题执行完整 RAG 流程（检索 + 生成）
@@ -71,10 +84,12 @@ async def eval_rag(req: RAGEvalRequest, user: TokenPayload = Depends(get_current
     3. 返回各维度平均分和逐条明细
     """
     test_cases = []
+    # 在请求上下文内创建，确保检索器绑定当前 JWT 对应的租户 collection。
+    rag_service = RAGService(use_semantic_cache=False)
 
     for question in req.questions:
         # 执行 RAG 流程
-        rag_result = await _rag_service.query(question)
+        rag_result = await rag_service.query(question)
         # 组装检索到的上下文
         context = "\n".join(
             [f"[{s.get('source', '未知')}] (score: {s.get('score', 0)})" for s in rag_result.sources]
@@ -108,3 +123,11 @@ async def eval_rag(req: RAGEvalRequest, user: TokenPayload = Depends(get_current
         ],
         "evaluated_at": summary.evaluated_at,
     })
+
+
+@router.post("/dataset", summary="执行版本化 RAG 题库评测")
+async def eval_dataset(req: DatasetEvalRequest, user: TokenPayload = Depends(require_admin)):
+    """执行题库回归评测，返回来源、拒答、关键事实和延迟等确定性指标。"""
+    # DatasetEvalService 内部创建 RAGService，必须在 TenantMiddleware 注入上下文之后执行。
+    summary = await DatasetEvalService().evaluate(limit=req.limit)
+    return R.success(data=summary.to_dict())

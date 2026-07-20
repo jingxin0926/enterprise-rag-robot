@@ -143,6 +143,67 @@ function formatTime(value) {
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString("zh-CN", { hour12: false });
 }
 
+function formatPercent(value) {
+  if (!Number.isFinite(Number(value))) return "-";
+  return `${(Number(value) * 100).toFixed(1)}%`;
+}
+
+function renderEvaluation(data) {
+  setText("#evaluation-total", String(data.total ?? "-"));
+  setText("#evaluation-source-exact", formatPercent(data.source_exact_match_rate));
+  setText("#evaluation-source-recall", formatPercent(data.source_recall));
+  setText("#evaluation-fact-coverage", formatPercent(data.answer_point_coverage));
+  setText("#evaluation-refusal", formatPercent(data.refusal_accuracy));
+  setText("#evaluation-latency", Number.isFinite(Number(data.average_latency_ms)) ? `${Number(data.average_latency_ms).toFixed(0)} ms` : "-");
+  setText("#evaluation-summary", `已执行 ${data.total || 0} 条，知识问答 ${data.knowledge_cases || 0} 条，拒答 ${data.refusal_cases || 0} 条`);
+
+  const body = $("#evaluation-result-list");
+  body.innerHTML = "";
+  const results = Array.isArray(data.results) ? data.results : [];
+  if (results.length === 0) {
+    body.innerHTML = '<tr><td class="table-empty" colspan="6">暂无评测结果</td></tr>';
+    return;
+  }
+
+  results.forEach((result) => {
+    const sourcePassed = result.source_exact_match ? "通过" : "未通过";
+    const refusalPassed = result.should_refuse ? (result.refusal_correct ? "通过" : "未通过") : "-";
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td><strong>${escapeHtml(result.case_id || "-")}</strong></td>
+      <td>${escapeHtml(result.category || "-")}</td>
+      <td><span class="status-badge status-${result.source_exact_match ? "completed" : "failed"}">${sourcePassed}</span></td>
+      <td>${formatPercent(result.answer_point_coverage)}</td>
+      <td>${result.should_refuse ? `<span class="status-badge status-${result.refusal_correct ? "completed" : "failed"}">${refusalPassed}</span>` : "-"}</td>
+      <td>${Number(result.latency_ms || 0).toFixed(0)} ms</td>
+    `;
+    body.appendChild(row);
+  });
+}
+
+async function runDatasetEvaluation(event) {
+  const limit = Number($("#evaluation-limit").value);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
+    showToast("执行条数需在 1 到 50 之间");
+    return;
+  }
+
+  const restore = setLoading(event.currentTarget, "评测中");
+  try {
+    const payload = await api("/eval/dataset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ limit }),
+    });
+    renderEvaluation(payload.data || {});
+    showToast("评测完成");
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    restore();
+  }
+}
+
 function renderDocuments(items, total) {
   const body = $("#document-list");
   body.innerHTML = "";
@@ -368,6 +429,7 @@ function bindEvents() {
   $("#knowledge-info-btn").addEventListener("click", refreshKnowledgeInfo);
   $("#documents-refresh-btn").addEventListener("click", () => refreshDocuments().catch((error) => showToast(error.message)));
   $("#backfill-legacy-btn").addEventListener("click", backfillLegacyDocuments);
+  $("#run-evaluation-btn").addEventListener("click", runDatasetEvaluation);
   $("#document-list").addEventListener("click", deleteDocument);
   $("#upload-form").addEventListener("submit", uploadDocuments);
   $("#question-form").addEventListener("submit", askQuestion);
