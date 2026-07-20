@@ -3,6 +3,7 @@
 import json
 
 from loguru import logger
+from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from app.infra.cache.redis_client import get_redis
 
@@ -27,7 +28,12 @@ class DocumentTaskQueue:
         redis = await get_redis()
         if redis is None:
             raise RuntimeError("Redis 不可用，Worker 无法领取任务")
-        raw = await redis.brpoplpush(_PENDING_KEY, _PROCESSING_KEY, timeout=timeout)
+        try:
+            raw = await redis.brpoplpush(_PENDING_KEY, _PROCESSING_KEY, timeout=timeout)
+        except RedisTimeoutError:
+            # Redis-py 可能将 BRPOPLPUSH 的正常空闲超时包装为异常；
+            # Worker 应继续等待，而不是退出并触发无意义的容器重启。
+            return None
         if raw is None:
             return None
         payload = json.loads(raw)
