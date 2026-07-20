@@ -117,46 +117,30 @@ class RAGService:
         if self._rewriter:
             rewritten = await self._rewriter.rewrite(question)
 
-        # 原问题保留精确字段、接口、Topic 等词；改写问题补充口语化语义。
-        queries = [question]
-        if rewritten != question:
-            queries.append(rewritten)
-
         if self._hybrid:
-            result_sets = [
-                self._hybrid.search(query=query, top_k=self._top_k, score_threshold=self._score_threshold)
-                for query in queries
-            ]
+            results = self._hybrid.search(
+                query=rewritten,
+                top_k=self._top_k,
+                score_threshold=self._score_threshold,
+            )
         else:
-            result_sets = [
-                [
-                    HybridResult(content=result.content, score=result.score, metadata=result.metadata, source_type="vector", vector_score=result.score)
-                    for result in self._vector_store.search(query=query, top_k=self._top_k, score_threshold=self._score_threshold)
-                ]
-                for query in queries
+            vector_results = self._vector_store.search(
+                query=rewritten,
+                top_k=self._top_k,
+                score_threshold=self._score_threshold,
+            )
+            results = [
+                HybridResult(
+                    content=result.content,
+                    score=result.score,
+                    metadata=result.metadata,
+                    source_type="vector",
+                    vector_score=result.score,
+                )
+                for result in vector_results
             ]
-
-        results = self._merge_multi_query_results(result_sets)
-        logger.info("[RAG-MultiQuery] queries={} merged_hits={}", len(queries), len(results))
 
         return results, rewritten
-
-    def _merge_multi_query_results(self, result_sets: list[list[HybridResult]]) -> list[HybridResult]:
-        """合并原问题与改写问题的候选，保留每段最强且可解释的证据。"""
-        merged: dict[str, HybridResult] = {}
-        for result_set in result_sets:
-            for result in result_set:
-                existing = merged.get(result.content)
-                if existing is None:
-                    merged[result.content] = result
-                    continue
-                existing.score = max(existing.score, result.score)
-                existing.vector_score = max(filter(None, [existing.vector_score, result.vector_score]), default=None)
-                existing.bm25_score = max(filter(None, [existing.bm25_score, result.bm25_score]), default=None)
-                existing.rrf_score = max(filter(None, [existing.rrf_score, result.rrf_score]), default=None)
-                existing.source_type = "hybrid+multi_query"
-
-        return sorted(merged.values(), key=lambda result: result.score, reverse=True)[: self._top_k]
 
     def _filter_sufficient_evidence(self, results: list[HybridResult]) -> list[HybridResult]:
         """只保留双路一致或高语义相似度证据，避免无依据生成。"""

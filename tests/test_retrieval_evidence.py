@@ -40,19 +40,3 @@ def test_evidence_gate_requires_quality_bm25_or_strong_vector() -> None:
 
     assert [item.content for item in accepted] == ["高质量双路", "强向量"]
 
-
-def test_multi_query_merge_preserves_the_strongest_evidence() -> None:
-    """同一片段被原问题和改写问题命中时，应合并而非重复占用 Top-K。"""
-    rag_service = RAGService.__new__(RAGService)
-    rag_service._top_k = 3
-
-    merged = rag_service._merge_multi_query_results(
-        [
-            [HybridResult(content="接口片段", score=0.01, vector_score=0.58, bm25_score=1.2)],
-            [HybridResult(content="接口片段", score=0.02, vector_score=0.66, bm25_score=4.5)],
-        ]
-    )
-
-    assert len(merged) == 1
-    assert merged[0].vector_score == 0.66
-    assert merged[0].bm25_score == 4.5
