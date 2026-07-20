@@ -127,6 +127,10 @@ class AppSettings(BaseSettings):
         ge=0,
         description="双路证据成立所需的最低 BM25 分数，过滤通用词命中",
     )
+    rag_llm_evidence_validator_enabled: bool = Field(
+        default=True,
+        description="是否启用 LLM 证据判定器，作为确定性门禁后的第二道防线",
+    )
 
     # ============================================================
     # 安全 / JWT

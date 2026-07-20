@@ -20,6 +20,7 @@ from app.core.config import settings
 from app.infra.llm.deepseek_client import ChatMessage, get_deepseek_client
 from app.infra.vector.qdrant_store import get_qdrant_store
 from app.prompts.loader import get_prompt_loader
+from app.service.retrieval.evidence_validator import EvidenceValidator, EvidenceVerdict
 from app.service.retrieval.hybrid_retriever import HybridResult, get_hybrid_retriever
 from app.service.retrieval.query_rewriter import QueryRewriter
 
@@ -41,6 +42,7 @@ class RAGResponse:
     retrieval_mode: str = "hybrid"                       # 检索模式："vector"(纯向量) / "hybrid"(混合检索)
     answer_status: str = "ANSWERED"                       # ANSWERED / INSUFFICIENT_EVIDENCE / CACHED
     evidence_count: int = 0                               # 参与生成的去重证据片段数
+    evidence_verdict: str = "DETERMINISTIC"                # DETERMINISTIC / LLM_VALIDATED / LLM_REJECTED
 
 
 class RAGService:
@@ -68,6 +70,7 @@ class RAGService:
         self._use_hybrid = use_hybrid
         self._use_rewrite = use_rewrite
         self._use_semantic_cache = use_semantic_cache
+        self._evidence_validator = EvidenceValidator() if settings.rag_llm_evidence_validator_enabled else None
         self._llm = get_deepseek_client()
         self._rewriter = QueryRewriter() if use_rewrite else None
         self._hybrid = get_hybrid_retriever() if use_hybrid else None
@@ -170,6 +173,12 @@ class RAGService:
         )
         return accepted
 
+    async def _validate_evidence(self, question: str, context: str) -> EvidenceVerdict | None:
+        """执行可选的第二道 LLM 证据门禁。"""
+        if self._evidence_validator is None:
+            return None
+        return await self._evidence_validator.validate(question, context)
+
     async def query(self, question: str) -> RAGResponse:
         """RAG 问答（非流式）"""
         import time
@@ -216,6 +225,17 @@ class RAGService:
                 sources=[],
                 rewritten_query=rewritten,
                 answer_status="INSUFFICIENT_EVIDENCE",
+            )
+
+        verdict = await self._validate_evidence(question, context)
+        if verdict is not None and not verdict.sufficient:
+            tracer.end()
+            return RAGResponse(
+                answer="抱歉，现有知识库证据不足以可靠回答该问题。请补充相关文档或换一种问法。",
+                sources=[],
+                rewritten_query=rewritten,
+                answer_status="INSUFFICIENT_EVIDENCE",
+                evidence_verdict="LLM_REJECTED",
             )
 
         # 3. 构建消息（从 Prompt 文件加载系统提示词，注入检索上下文）
@@ -266,6 +286,7 @@ class RAGService:
             rewritten_query=rewritten,
             retrieval_mode="hybrid" if self._use_hybrid else "vector",
             evidence_count=len(sources),
+            evidence_verdict="LLM_VALIDATED" if verdict is not None else "DETERMINISTIC",
         )
 
     async def query_stream(self, question: str) -> AsyncGenerator[str, None]:
@@ -279,6 +300,11 @@ class RAGService:
 
         if not context:
             yield "抱歉，知识库中暂未找到与您问题相关的内容。请尝试换个说法，或确认相关文档是否已上传。"
+            return
+
+        verdict = await self._validate_evidence(question, context)
+        if verdict is not None and not verdict.sufficient:
+            yield "抱歉，现有知识库证据不足以可靠回答该问题。请补充相关文档或换一种问法。"
             return
 
         # 3. 构建消息（从 Prompt 文件加载系统提示词，注入检索上下文）
