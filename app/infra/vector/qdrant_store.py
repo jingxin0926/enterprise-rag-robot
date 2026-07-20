@@ -23,6 +23,7 @@ from qdrant_client.models import (
     MatchValue,
     PointIdsList,
     PointStruct,
+    Range,
     VectorParams,
 )
 
@@ -225,6 +226,36 @@ class QdrantStore:
             wait=True,
         )
         logger.info("[Qdrant] 删除文档向量 | collection={} document_id={}", self._collection_name, document_id)
+
+    def get_neighbor_chunks(self, document_id: str, chunk_index: int, window: int = 1) -> list[SearchResult]:
+        """读取同一文档中命中片段附近的内容，用于补全结构化文档的局部上下文。"""
+        if window <= 0:
+            return []
+
+        lower_bound = max(0, chunk_index - window)
+        upper_bound = chunk_index + window
+        points, _ = self._client.scroll(
+            collection_name=self._collection_name,
+            scroll_filter=Filter(
+                must=[
+                    FieldCondition(key="document_id", match=MatchValue(value=document_id)),
+                    FieldCondition(key="chunk_index", range=Range(gte=lower_bound, lte=upper_bound)),
+                ]
+            ),
+            limit=window * 2 + 1,
+            with_payload=True,
+            with_vectors=False,
+        )
+        chunks = [
+            SearchResult(
+                content=(point.payload or {}).get("content", ""),
+                score=0.0,
+                metadata={key: value for key, value in (point.payload or {}).items() if key != "content"},
+            )
+            for point in points
+            if (point.payload or {}).get("content")
+        ]
+        return sorted(chunks, key=lambda item: int(item.metadata.get("chunk_index", 0)))
 
     def list_legacy_points(self, batch_size: int = 256) -> list[dict]:
         """读取尚未关联 document_id 的历史向量 payload。"""

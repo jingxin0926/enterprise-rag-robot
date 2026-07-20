@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from loguru import logger
 
+from app.core.config import settings
 from app.infra.llm.deepseek_client import ChatMessage, get_deepseek_client
 from app.prompts.loader import get_prompt_loader
 
@@ -38,7 +39,11 @@ class EvidenceValidator:
 
     async def validate(self, question: str, context: str) -> EvidenceVerdict:
         """调用低 Token 判定请求，禁止依据通用词或常识放行。"""
-        prompt = self._loader.load("evidence_validator", question=question, context=context[:2400])
+        prompt = self._loader.load(
+            "evidence_validator",
+            question=question,
+            context=context[: settings.rag_evidence_validator_max_context_chars],
+        )
         response = await self._llm.chat(
             [ChatMessage(role="user", content=prompt)],
             temperature=0,

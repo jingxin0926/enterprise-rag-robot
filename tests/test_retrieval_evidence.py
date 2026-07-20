@@ -1,6 +1,9 @@
 """混合检索证据溯源与可信回答门禁测试。"""
 
-from app.infra.vector.qdrant_store import SearchResult
+from types import SimpleNamespace
+from unittest.mock import Mock
+
+from app.infra.vector.qdrant_store import QdrantStore, SearchResult
 from app.service.rag_service import RAGService
 from app.service.retrieval.bm25_retriever import BM25Result
 from app.service.retrieval.hybrid_retriever import HybridResult, HybridRetriever
@@ -40,3 +43,66 @@ def test_evidence_gate_requires_quality_bm25_or_strong_vector() -> None:
 
     assert [item.content for item in accepted] == ["高质量双路", "强向量"]
 
+
+def test_context_expansion_adds_only_adjacent_chunks_from_same_document() -> None:
+    """局部扩展应补齐命中片段相邻内容，但不能改变引用来源或重复其他原始命中。"""
+
+    class FakeVectorStore:
+        def get_neighbor_chunks(self, document_id: str, chunk_index: int, window: int) -> list[SearchResult]:
+            assert (document_id, chunk_index, window) == ("doc-image", 3, 1)
+            return [
+                SearchResult(
+                    content="相邻片段中的 duration_seconds 字段说明",
+                    score=0.0,
+                    metadata={"source": "图片作品改造.md", "document_id": "doc-image", "chunk_index": 2},
+                ),
+                SearchResult(
+                    content="已命中的主片段",
+                    score=0.0,
+                    metadata={"source": "图片作品改造.md", "document_id": "doc-image", "chunk_index": 3},
+                ),
+            ]
+
+    rag_service = RAGService.__new__(RAGService)
+    rag_service._vector_store = FakeVectorStore()
+    rag_service._context_neighbor_window = 1
+    rag_service._context_max_neighbor_chunks = 6
+
+    context, sources = rag_service._build_context(
+        [
+            HybridResult(
+                content="已命中的主片段",
+                score=0.02,
+                metadata={"source": "图片作品改造.md", "document_id": "doc-image", "chunk_index": 3},
+                source_type="hybrid",
+            )
+        ]
+    )
+
+    assert "已命中的主片段" in context
+    assert "duration_seconds" in context
+    assert "同文档相邻片段" in context
+    assert [source["source"] for source in sources] == ["图片作品改造.md"]
+
+
+def test_qdrant_neighbor_lookup_is_scoped_to_one_document_and_chunk_window() -> None:
+    """Qdrant 相邻片段查询必须同时限制文档 ID 和片段索引范围。"""
+    store = QdrantStore.__new__(QdrantStore)
+    store._collection_name = "tenant_t_default_knowledge"
+    store._client = Mock()
+    store._client.scroll.return_value = (
+        [
+            SimpleNamespace(payload={"content": "第三段", "chunk_index": 3}),
+            SimpleNamespace(payload={"content": "第二段", "chunk_index": 2}),
+        ],
+        None,
+    )
+
+    chunks = store.get_neighbor_chunks(document_id="doc-image", chunk_index=3, window=1)
+
+    assert [chunk.content for chunk in chunks] == ["第二段", "第三段"]
+    kwargs = store._client.scroll.call_args.kwargs
+    conditions = kwargs["scroll_filter"].must
+    assert conditions[0].match.value == "doc-image"
+    assert conditions[1].range.gte == 2
+    assert conditions[1].range.lte == 4

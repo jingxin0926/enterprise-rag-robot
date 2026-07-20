@@ -131,6 +131,24 @@ class AppSettings(BaseSettings):
         default=True,
         description="是否启用 LLM 证据判定器，作为确定性门禁后的第二道防线",
     )
+    rag_context_neighbor_window: int = Field(
+        default=1,
+        ge=0,
+        le=3,
+        description="每个命中片段向前、向后扩展的同文档相邻片段数量",
+    )
+    rag_context_max_neighbor_chunks: int = Field(
+        default=6,
+        ge=0,
+        le=20,
+        description="单次问答最多补充的同文档相邻片段数量，防止上下文无限膨胀",
+    )
+    rag_evidence_validator_max_context_chars: int = Field(
+        default=6000,
+        ge=1000,
+        le=12000,
+        description="LLM 证据判定器可见的最大上下文长度",
+    )
 
     # ============================================================
     # 安全 / JWT

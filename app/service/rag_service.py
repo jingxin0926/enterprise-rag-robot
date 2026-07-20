@@ -67,6 +67,8 @@ class RAGService:
         self._score_threshold = score_threshold if score_threshold is not None else settings.rag_vector_score_threshold
         self._strong_vector_score = settings.rag_strong_vector_score
         self._minimum_bm25_score = settings.rag_min_bm25_score
+        self._context_neighbor_window = settings.rag_context_neighbor_window
+        self._context_max_neighbor_chunks = settings.rag_context_max_neighbor_chunks
         self._use_hybrid = use_hybrid
         self._use_rewrite = use_rewrite
         self._use_semantic_cache = use_semantic_cache
@@ -83,13 +85,15 @@ class RAGService:
 
         context_parts = []
         sources = []
-        seen = set()  # 去重
+        reserved_contents = {result.content for result in results}
+        emitted_contents: set[str] = set()
+        neighbor_chunks_added = 0
 
         for i, r in enumerate(results, 1):
             # 去重（同一段内容不重复引用）
-            if r.content in seen:
+            if r.content in emitted_contents:
                 continue
-            seen.add(r.content)
+            emitted_contents.add(r.content)
 
             source_name = r.metadata.get("source", "未知")
             context_parts.append(f"[{i}] (来源: {source_name})\n{r.content}")
@@ -102,6 +106,48 @@ class RAGService:
                 "bm25_score": round(r.bm25_score, 4) if r.bm25_score is not None else None,
                 "rrf_score": round(r.rrf_score, 4) if r.rrf_score is not None else None,
             })
+
+            if neighbor_chunks_added >= self._context_max_neighbor_chunks:
+                continue
+            document_id = r.metadata.get("document_id")
+            chunk_index = r.metadata.get("chunk_index")
+            if not document_id or chunk_index is None:
+                continue
+
+            try:
+                neighbors = self._vector_store.get_neighbor_chunks(
+                    document_id=str(document_id),
+                    chunk_index=int(chunk_index),
+                    window=self._context_neighbor_window,
+                )
+            except (TypeError, ValueError) as exc:
+                logger.warning("[RAG-ContextExpansion] 忽略非法文档片段元数据 | error={}", exc)
+                continue
+            except Exception as exc:
+                # 上下文补全失败不能阻断主检索链路，仍使用原始命中继续完成问答。
+                logger.warning("[RAG-ContextExpansion] 相邻片段读取失败，降级为原始命中 | error={}", exc)
+                continue
+
+            for neighbor in neighbors:
+                if neighbor_chunks_added >= self._context_max_neighbor_chunks:
+                    break
+                if neighbor.content in reserved_contents or neighbor.content in emitted_contents:
+                    continue
+                emitted_contents.add(neighbor.content)
+                neighbor_chunks_added += 1
+                neighbor_source = neighbor.metadata.get("source", source_name)
+                neighbor_index = neighbor.metadata.get("chunk_index", "?")
+                context_parts.append(
+                    f"[{i}.{neighbor_chunks_added}] (同文档相邻片段 | 来源: {neighbor_source} | 片段: {neighbor_index})\n"
+                    f"{neighbor.content}"
+                )
+
+        logger.info(
+            "[RAG-ContextExpansion] base_hits={} neighbor_chunks={} window={}",
+            len(sources),
+            neighbor_chunks_added,
+            self._context_neighbor_window,
+        )
 
         return "\n\n".join(context_parts), sources
 
