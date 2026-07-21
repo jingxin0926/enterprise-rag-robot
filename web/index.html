@@ -211,6 +211,34 @@
                 </table>
               </div>
             </section>
+
+            <section class="panel document-panel">
+              <div class="panel-header">
+                <div>
+                  <h2>评测运行历史</h2>
+                  <span>保留最近 10 次当前租户的运行记录</span>
+                </div>
+                <button id="evaluation-history-refresh-btn" class="ghost-btn" type="button">刷新</button>
+              </div>
+              <div class="table-wrap">
+                <table class="document-table">
+                  <thead>
+                    <tr>
+                      <th>执行时间</th>
+                      <th>Git 提交</th>
+                      <th>检索参数</th>
+                      <th>来源召回</th>
+                      <th>事实覆盖</th>
+                      <th>平均耗时</th>
+                      <th aria-label="操作"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="evaluation-history-list">
+                    <tr><td class="table-empty" colspan="7">暂无历史评测运行</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
           </section>
         </section>
       </main>

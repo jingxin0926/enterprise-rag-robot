@@ -12,8 +12,8 @@ from pydantic import BaseModel, Field
 from app.api.deps import get_current_user
 from app.core.response import R
 from app.core.security import TokenPayload
-from app.service.dataset_eval_service import DatasetEvalService
 from app.service.eval_service import EvalService
+from app.service.evaluation_history_service import EvaluationHistoryService
 from app.service.rag_service import RAGService
 
 router = APIRouter(prefix="/eval", tags=["评测"])
@@ -128,6 +128,30 @@ async def eval_rag(req: RAGEvalRequest, user: TokenPayload = Depends(require_adm
 @router.post("/dataset", summary="执行版本化 RAG 题库评测")
 async def eval_dataset(req: DatasetEvalRequest, user: TokenPayload = Depends(require_admin)):
     """执行题库回归评测，返回来源、拒答、关键事实和延迟等确定性指标。"""
-    # DatasetEvalService 内部创建 RAGService，必须在 TenantMiddleware 注入上下文之后执行。
-    summary = await DatasetEvalService().evaluate(limit=req.limit)
-    return R.success(data=summary.to_dict())
+    # 在 TenantMiddleware 注入上下文之后创建，确保评测只读取当前租户的知识库。
+    summary = await EvaluationHistoryService().execute(
+        tenant_id=user.tenant_id,
+        operator_id=user.user_id,
+        limit=req.limit,
+    )
+    return R.success(data=summary)
+
+
+@router.get("/dataset/runs", summary="查询题库评测历史")
+async def list_dataset_runs(
+    limit: int = 10,
+    user: TokenPayload = Depends(require_admin),
+):
+    """查询当前租户最近的评测运行，供质量趋势对比使用。"""
+    bounded_limit = min(max(limit, 1), 50)
+    items = await EvaluationHistoryService().list_runs(user.tenant_id, bounded_limit)
+    return R.success(data={"items": items})
+
+
+@router.get("/dataset/runs/{run_id}", summary="查询一次题库评测明细")
+async def get_dataset_run(run_id: str, user: TokenPayload = Depends(require_admin)):
+    """按运行 ID 回看汇总、检索参数快照和逐题明细。"""
+    payload = await EvaluationHistoryService().get_run_detail(user.tenant_id, run_id)
+    if payload is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="评测运行不存在或无权访问")
+    return R.success(data=payload)

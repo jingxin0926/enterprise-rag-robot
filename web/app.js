@@ -181,6 +181,63 @@ function renderEvaluation(data) {
   });
 }
 
+function formatEvaluationConfig(config) {
+  if (!config || typeof config !== "object") return "-";
+  const vector = Number(config.vector_score_threshold);
+  const strong = Number(config.strong_vector_score);
+  const window = Number(config.context_neighbor_window);
+  const parts = [];
+  if (Number.isFinite(vector)) parts.push(`向量 ${vector.toFixed(2)}`);
+  if (Number.isFinite(strong)) parts.push(`强向量 ${strong.toFixed(2)}`);
+  if (Number.isFinite(window)) parts.push(`相邻 ${window}`);
+  return parts.join(" / ") || "-";
+}
+
+function renderEvaluationHistory(items) {
+  const body = $("#evaluation-history-list");
+  body.innerHTML = "";
+  if (!Array.isArray(items) || items.length === 0) {
+    body.innerHTML = '<tr><td class="table-empty" colspan="7">暂无历史评测运行</td></tr>';
+    return;
+  }
+
+  items.forEach((item) => {
+    const row = document.createElement("tr");
+    const completed = item.status === "COMPLETED";
+    row.innerHTML = `
+      <td>${escapeHtml(formatTime(item.create_time))}</td>
+      <td><code>${escapeHtml(item.git_commit || "unknown")}</code></td>
+      <td>${escapeHtml(formatEvaluationConfig(item.retrieval_config))}</td>
+      <td>${formatPercent(item.source_recall)}</td>
+      <td>${formatPercent(item.answer_point_coverage)}</td>
+      <td>${Number(item.average_latency_ms || 0).toFixed(0)} ms</td>
+      <td><button class="ghost-btn history-detail-btn" type="button" data-run-id="${escapeHtml(item.id)}" ${completed ? "" : "disabled"}>查看</button></td>
+    `;
+    body.appendChild(row);
+  });
+}
+
+async function refreshEvaluationHistory() {
+  if (!state.token) return;
+  const payload = await api("/eval/dataset/runs?limit=10");
+  renderEvaluationHistory(payload.data?.items || []);
+}
+
+async function loadEvaluationRun(event) {
+  const button = event.target.closest(".history-detail-btn");
+  if (!button || button.disabled) return;
+  const restore = setLoading(button, "加载中");
+  try {
+    const payload = await api(`/eval/dataset/runs/${encodeURIComponent(button.dataset.runId)}`);
+    renderEvaluation(payload.data || {});
+    showToast("已加载历史评测结果");
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    restore();
+  }
+}
+
 async function runDatasetEvaluation(event) {
   const limit = Number($("#evaluation-limit").value);
   if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
@@ -196,6 +253,7 @@ async function runDatasetEvaluation(event) {
       body: JSON.stringify({ limit }),
     });
     renderEvaluation(payload.data || {});
+    await refreshEvaluationHistory();
     showToast("评测完成");
   } catch (error) {
     showToast(error.message);
@@ -420,6 +478,9 @@ function switchView(event) {
   if (button.dataset.view === "knowledge-view" && state.token) {
     refreshDocuments().catch((error) => showToast(error.message));
   }
+  if (button.dataset.view === "evaluation-view" && state.token) {
+    refreshEvaluationHistory().catch((error) => showToast(error.message));
+  }
 }
 
 function bindEvents() {
@@ -430,6 +491,8 @@ function bindEvents() {
   $("#documents-refresh-btn").addEventListener("click", () => refreshDocuments().catch((error) => showToast(error.message)));
   $("#backfill-legacy-btn").addEventListener("click", backfillLegacyDocuments);
   $("#run-evaluation-btn").addEventListener("click", runDatasetEvaluation);
+  $("#evaluation-history-refresh-btn").addEventListener("click", () => refreshEvaluationHistory().catch((error) => showToast(error.message)));
+  $("#evaluation-history-list").addEventListener("click", loadEvaluationRun);
   $("#document-list").addEventListener("click", deleteDocument);
   $("#upload-form").addEventListener("submit", uploadDocuments);
   $("#question-form").addEventListener("submit", askQuestion);

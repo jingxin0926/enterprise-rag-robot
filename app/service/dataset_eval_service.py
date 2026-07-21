@@ -87,6 +87,11 @@ class DatasetEvalService:
         # 回归评测必须绕过语义缓存，否则无法验证真实的检索来源。
         self._rag_service = rag_service or RAGService(use_semantic_cache=False)
 
+    @property
+    def dataset_path(self) -> Path:
+        """Return the dataset path so a run can persist its immutable content checksum."""
+        return self._dataset_path
+
     def load_cases(self) -> list[DatasetCase]:
         """加载并校验 JSONL 题库。"""
         if not self._dataset_path.is_file():

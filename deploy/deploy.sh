@@ -39,6 +39,7 @@ fi
 
 # 构建并启动。由 Compose 解析 .env，避免 shell 解析特殊字符导致密钥损坏。
 echo "📦 构建并启动服务..."
+export APP_GIT_COMMIT="$(git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)"
 docker compose --env-file .env -f deploy/docker-compose.yml up -d --build
 
 echo ""

@@ -22,6 +22,8 @@ FROM python:3.12-slim AS runtime
 
 WORKDIR /app
 
+ARG APP_GIT_COMMIT=unknown
+
 # 从 builder 阶段拷贝虚拟环境
 COPY --from=builder /app/.venv /app/.venv
 
@@ -39,6 +41,7 @@ ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
 ENV APP_ENV=prod
 ENV LOG_CONSOLE=true
+ENV APP_GIT_COMMIT=${APP_GIT_COMMIT}
 
 # 创建非 root 用户运行（安全）
 RUN useradd -m appuser && chown -R appuser:appuser /app

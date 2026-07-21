@@ -53,6 +53,7 @@ class AppSettings(BaseSettings):
     app_env: AppEnv = Field(default=AppEnv.DEV, description="运行环境")
     app_name: str = Field(default="smart-qa-system", description="应用名")
     app_version: str = Field(default="0.1.0", description="版本号")
+    app_git_commit: str = Field(default="unknown", description="构建时注入的 Git 提交号")
     app_port: int = Field(default=8000, description="监听端口")
     app_debug: bool = Field(default=True, description="是否开启 Debug")
 

@@ -8,6 +8,8 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
+      args:
+        APP_GIT_COMMIT: ${APP_GIT_COMMIT:-unknown}
     container_name: smart-qa-app
     ports:
       - "127.0.0.1:8000:8000"
@@ -52,6 +54,8 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
+      args:
+        APP_GIT_COMMIT: ${APP_GIT_COMMIT:-unknown}
     container_name: smart-qa-worker
     command: python -m app.worker.document_worker
     environment:
