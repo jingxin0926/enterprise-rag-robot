@@ -4,7 +4,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from uuid import uuid4
+from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from loguru import logger
 
@@ -111,8 +111,10 @@ class DocumentIngestService:
                 return TaskProcessResult(task_id=task_id, completed=True)
             if task["task_status"] in {"COMPLETED", "FAILED"}:
                 return TaskProcessResult(task_id=task_id, completed=True)
+            if not await KnowledgeRepository.claim_task(session, task_id):
+                logger.info("[Document] 重复或正在执行的任务消息已跳过 | task_id={}", task_id)
+                return TaskProcessResult(task_id=task_id, completed=True)
             await KnowledgeRepository.update_document_status(session, task["document_id"], "PARSING", error_message="")
-            await KnowledgeRepository.update_task_status(session, task_id, "RUNNING")
 
         point_ids: list[str] = []
         collection_name = get_tenant_collection_name(task["tenant_id"])
@@ -140,7 +142,8 @@ class DocumentIngestService:
             texts = [chunk.content for chunk in chunks]
 
             await self._set_status(task["document_id"], task_id, "INDEXING", "RUNNING", chunk_count=len(chunks))
-            point_ids = store.add_documents(texts, metadatas)
+            point_ids = self.build_point_ids(task["document_id"], len(texts))
+            store.add_documents(texts, metadatas, point_ids=point_ids)
             hybrid.add_documents(texts, metadatas)
             records = [
                 {
@@ -202,6 +205,47 @@ class DocumentIngestService:
                 await KnowledgeRepository.update_task_status(session, task_id, "FAILED", error_message=str(exc)[:1000])
             logger.exception("[Document] 入库任务最终失败 | task_id={} error={}", task_id, exc)
             return TaskProcessResult(task_id=task_id, completed=True)
+
+    async def recover_startup_tasks(self) -> list[str]:
+        """恢复 Worker 中断前的任务，并找回“已建库但未成功投递”的任务。"""
+        async with session_scope() as session:
+            recovered = await KnowledgeRepository.recover_running_tasks(session)
+            task_ids = await KnowledgeRepository.list_recoverable_task_ids(session)
+        if recovered:
+            logger.warning("[Document] Worker 重启恢复运行中任务 | count={}", recovered)
+        return task_ids
+
+    async def retry_failed_task(
+        self,
+        *,
+        tenant_id: str,
+        operator_id: str,
+        task_id: str,
+        trace_id: str,
+    ) -> bool:
+        """将最终失败的任务重置为待处理状态，并记录人工恢复审计。"""
+        async with session_scope() as session:
+            reset = await KnowledgeRepository.reset_failed_task_for_retry(session, tenant_id, task_id)
+            if not reset:
+                return False
+            await KnowledgeRepository.write_audit_log(
+                session,
+                {
+                    "tenant_id": tenant_id,
+                    "operator_id": operator_id,
+                    "resource_type": "INGEST_TASK",
+                    "resource_id": task_id,
+                    "action": "MANUAL_RETRY",
+                    "detail": {},
+                    "trace_id": trace_id,
+                },
+            )
+        return True
+
+    @staticmethod
+    def build_point_ids(document_id: str, chunk_count: int) -> list[str]:
+        """基于文档和片段序号生成稳定 Qdrant Point ID，保证重复消费可覆盖写入。"""
+        return [uuid5(NAMESPACE_URL, f"smartqa:{document_id}:{index}").hex for index in range(chunk_count)]
 
     @staticmethod
     def _persist_source(tenant_id: str, document_id: str, suffix: str, content: bytes) -> Path:

@@ -22,6 +22,8 @@ async def run_worker() -> None:
     queue = DocumentTaskQueue()
     service = DocumentIngestService()
     await queue.recover_processing_tasks()
+    for task_id in await service.recover_startup_tasks():
+        await queue.enqueue(task_id)
 
     try:
         while True:

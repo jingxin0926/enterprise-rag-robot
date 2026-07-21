@@ -168,6 +168,23 @@ async def get_ingest_task(task_id: str, user: TokenPayload = Depends(get_current
     return R.success(data=task, trace_id=get_trace_id())
 
 
+@router.post("/tasks/{task_id}/retry", summary="人工重试失败入库任务")
+async def retry_ingest_task(task_id: str, user: TokenPayload = Depends(get_current_user)):
+    """仅管理员可将最终失败任务重置并重新投递到 Worker。"""
+    if user.role != "admin":
+        return R.fail(code=403, message="仅管理员可重试入库任务", trace_id=get_trace_id())
+    retried = await _document_ingest_service.retry_failed_task(
+        tenant_id=user.tenant_id,
+        operator_id=user.user_id,
+        task_id=task_id,
+        trace_id=get_trace_id(),
+    )
+    if not retried:
+        return R.fail(code=409, message="任务不存在、未失败或已被删除，无法重试", trace_id=get_trace_id())
+    await _document_task_queue.enqueue(task_id)
+    return R.success(data={"task_id": task_id, "status": "PENDING"}, message="入库任务已重新投递", trace_id=get_trace_id())
+
+
 @router.delete("/documents/{document_id}", summary="删除文档")
 async def delete_document(document_id: str, user: TokenPayload = Depends(get_current_user)):
     """删除文档原件、元数据、向量切片与 BM25 索引。"""

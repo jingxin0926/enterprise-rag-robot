@@ -306,7 +306,10 @@ function renderDocuments(items, total) {
       <td>${Number(item.chunk_count || 0)}</td>
       <td>${formatFileSize(item.file_size)}</td>
       <td>${formatTime(item.update_time)}</td>
-      <td><button class="danger-btn" data-document-id="${escapeHtml(item.id)}" type="button">删除</button></td>
+      <td>
+        ${status === "FAILED" && item.task_id ? `<button class="ghost-btn" data-retry-task-id="${escapeHtml(item.task_id)}" type="button">重试</button>` : ""}
+        <button class="danger-btn" data-document-id="${escapeHtml(item.id)}" type="button">删除</button>
+      </td>
     `;
     body.appendChild(row);
   });
@@ -349,6 +352,24 @@ async function deleteDocument(event) {
     await api(`/knowledge/documents/${encodeURIComponent(button.dataset.documentId)}`, { method: "DELETE" });
     await Promise.all([refreshDocuments(), refreshKnowledgeInfo()]);
     showToast("文档已删除");
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    restore();
+  }
+}
+
+async function retryDocumentTask(event) {
+  const button = event.target.closest("[data-retry-task-id]");
+  if (!button) return;
+  if (!window.confirm("将重置失败次数并重新投递该入库任务，确认继续？")) return;
+
+  const restore = setLoading(button, "重试中");
+  try {
+    await api(`/knowledge/tasks/${encodeURIComponent(button.dataset.retryTaskId)}/retry`, { method: "POST" });
+    await refreshDocuments();
+    startDocumentPolling();
+    showToast("入库任务已重新投递");
   } catch (error) {
     showToast(error.message);
   } finally {
@@ -517,6 +538,7 @@ function bindEvents() {
   $("#evaluation-history-refresh-btn").addEventListener("click", () => refreshEvaluationHistory().catch((error) => showToast(error.message)));
   $("#evaluation-history-list").addEventListener("click", loadEvaluationRun);
   $("#document-list").addEventListener("click", deleteDocument);
+  $("#document-list").addEventListener("click", retryDocumentTask);
   $("#upload-form").addEventListener("submit", uploadDocuments);
   $("#question-form").addEventListener("submit", askQuestion);
   $("#new-session-btn").addEventListener("click", newSession);

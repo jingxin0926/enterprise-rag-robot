@@ -1,11 +1,13 @@
 """P1 知识库元数据基础行为测试。"""
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.core.config import PROJECT_ROOT
 from app.infra.queue.document_task_queue import DocumentTaskQueue
+from app.repository.knowledge_repository import KnowledgeRepository
+from app.service.knowledge.document_ingest_service import DocumentIngestService
 from app.service.knowledge.legacy_backfill_service import LegacyBackfillService
 from app.service.retrieval.bm25_retriever import BM25Retriever
 
@@ -71,3 +73,40 @@ async def test_document_task_queue_enqueues_task_id(monkeypatch: pytest.MonkeyPa
     await DocumentTaskQueue().enqueue("task-001")
 
     redis.lpush.assert_awaited_once_with("smartqa:document-task:pending", '{"task_id": "task-001"}')
+
+
+def test_document_point_ids_are_stable_per_document_and_chunk() -> None:
+    """同一文档的重复消费必须复用 Qdrant Point ID，而不是创建额外向量。"""
+    first = DocumentIngestService.build_point_ids("doc-001", 3)
+    second = DocumentIngestService.build_point_ids("doc-001", 3)
+
+    assert first == second
+    assert len(set(first)) == 3
+    assert first != DocumentIngestService.build_point_ids("doc-002", 3)
+
+
+@pytest.mark.asyncio
+async def test_task_claim_is_conditional_on_recoverable_status() -> None:
+    """重复消息只能由一个 Worker 从 PENDING/RETRYING 状态原子领取。"""
+    result = MagicMock(rowcount=1)
+    session = AsyncMock()
+    session.execute.return_value = result
+
+    assert await KnowledgeRepository.claim_task(session, "task-001") is True
+    statement = str(session.execute.await_args.args[0])
+    assert "status IN ('PENDING', 'RETRYING')" in statement
+    assert "SET status = 'RUNNING'" in statement
+
+
+@pytest.mark.asyncio
+async def test_manual_retry_only_resets_final_failed_task() -> None:
+    """人工重试必须限定在所属租户的 FAILED 任务，防止跨租户或重复重试。"""
+    result = MagicMock(rowcount=1)
+    session = AsyncMock()
+    session.execute.return_value = result
+
+    assert await KnowledgeRepository.reset_failed_task_for_retry(session, "tenant-a", "task-001") is True
+    statement = str(session.execute.await_args.args[0])
+    assert "t.tenant_id = :tenant_id" in statement
+    assert "t.status = 'FAILED'" in statement
+    assert "retry_count = 0" in statement

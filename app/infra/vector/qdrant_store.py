@@ -109,6 +109,7 @@ class QdrantStore:
         self,
         texts: list[str],
         metadatas: list[dict] | None = None,
+        point_ids: list[str] | None = None,
     ) -> list[str]:
         """
         批量添加文档到向量库
@@ -127,8 +128,11 @@ class QdrantStore:
         logger.info("[Qdrant] 正在向量化 {} 个片段...", len(texts))
         embeddings = self._get_embeddings(texts)
 
-        # 构造 points
-        ids = [uuid.uuid4().hex for _ in texts]
+        # 文档入库重试会传入稳定 Point ID。Qdrant 的 upsert 因此会覆盖同一片段，
+        # 而不是把 Worker 崩溃前已写入的向量再复制一份。
+        ids = point_ids or [uuid.uuid4().hex for _ in texts]
+        if len(ids) != len(texts):
+            raise ValueError("point_ids 数量必须与文本片段数量一致")
         points = []
         for i, (text, embedding, doc_id) in enumerate(zip(texts, embeddings, ids, strict=True)):
             payload = {"content": text}

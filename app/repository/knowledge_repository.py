@@ -152,13 +152,81 @@ class KnowledgeRepository:
                 UPDATE kb_ingest_task
                 SET status = :status,
                     error_message = :error_message,
-                    started_at = CASE WHEN :status = 'RUNNING' THEN :now ELSE started_at END,
+                    started_at = CASE WHEN :status = 'RUNNING' AND started_at IS NULL THEN :now ELSE started_at END,
                     finished_at = CASE WHEN :status IN ('COMPLETED', 'FAILED') THEN :now ELSE finished_at END
                 WHERE id = :task_id
                 """
             ),
             {"task_id": task_id, "status": status, "error_message": error_message, "now": now},
         )
+
+    @staticmethod
+    async def claim_task(session: AsyncSession, task_id: str) -> bool:
+        """以条件更新领取任务，阻止重复消息被多个 Worker 重复执行。"""
+        result = await session.execute(
+            text(
+                """
+                UPDATE kb_ingest_task
+                SET status = 'RUNNING', error_message = '',
+                    started_at = COALESCE(started_at, NOW())
+                WHERE id = :task_id AND task_type = 'INGEST'
+                  AND status IN ('PENDING', 'RETRYING')
+                """
+            ),
+            {"task_id": task_id},
+        )
+        return bool(result.rowcount)
+
+    @staticmethod
+    async def recover_running_tasks(session: AsyncSession) -> int:
+        """Worker 重启时将中断的运行中任务恢复为可重新领取状态。"""
+        result = await session.execute(
+            text(
+                """
+                UPDATE kb_ingest_task t
+                JOIN kb_document d ON d.id = t.document_id
+                SET t.status = 'RETRYING',
+                    t.error_message = 'Worker restarted before task acknowledgement',
+                    d.status = 'RETRYING',
+                    d.error_message = 'Worker restarted before task acknowledgement'
+                WHERE t.task_type = 'INGEST' AND t.status = 'RUNNING' AND d.deleted = 0
+                """
+            )
+        )
+        return int(result.rowcount or 0)
+
+    @staticmethod
+    async def list_recoverable_task_ids(session: AsyncSession) -> list[str]:
+        """返回启动恢复时需要重新投递的待处理任务。"""
+        result = await session.execute(
+            text(
+                """
+                SELECT id FROM kb_ingest_task
+                WHERE task_type = 'INGEST' AND status IN ('PENDING', 'RETRYING')
+                ORDER BY create_time ASC
+                """
+            )
+        )
+        return [str(row[0]) for row in result.all()]
+
+    @staticmethod
+    async def reset_failed_task_for_retry(session: AsyncSession, tenant_id: str, task_id: str) -> bool:
+        """管理员人工重试时重置最终失败任务，同时恢复文档可处理状态。"""
+        result = await session.execute(
+            text(
+                """
+                UPDATE kb_ingest_task t
+                JOIN kb_document d ON d.id = t.document_id
+                SET t.status = 'PENDING', t.retry_count = 0, t.error_message = '',
+                    t.started_at = NULL, t.finished_at = NULL,
+                    d.status = 'PENDING', d.error_message = ''
+                WHERE t.id = :task_id AND t.tenant_id = :tenant_id
+                  AND t.task_type = 'INGEST' AND t.status = 'FAILED' AND d.deleted = 0
+                """
+            ),
+            {"tenant_id": tenant_id, "task_id": task_id},
+        )
+        return bool(result.rowcount)
 
     @staticmethod
     async def get_task_context(session: AsyncSession, task_id: str) -> dict[str, Any] | None:
@@ -230,7 +298,12 @@ class KnowledgeRepository:
                 ) VALUES (
                     :id, :tenant_id, :document_id, :chunk_index, :qdrant_point_id,
                     :content_hash, :content_length, :metadata
-                )
+                ) ON DUPLICATE KEY UPDATE
+                    qdrant_point_id = VALUES(qdrant_point_id),
+                    content_hash = VALUES(content_hash),
+                    content_length = VALUES(content_length),
+                    metadata = VALUES(metadata),
+                    deleted = 0
                 """
             ),
             list(chunks),
@@ -287,11 +360,18 @@ class KnowledgeRepository:
         items = await session.execute(
             text(
                 """
-                SELECT id, knowledge_base_id, file_name, file_extension, file_size, status,
-                       chunk_count, error_message, version_no, create_time, update_time
-                FROM kb_document
-                WHERE tenant_id = :tenant_id AND deleted = 0
-                ORDER BY create_time DESC
+                SELECT d.id, d.knowledge_base_id, d.file_name, d.file_extension, d.file_size, d.status,
+                       d.chunk_count, d.error_message, d.version_no, d.create_time, d.update_time,
+                       latest.id AS task_id, latest.retry_count AS task_retry_count
+                FROM kb_document d
+                LEFT JOIN kb_ingest_task latest ON latest.id = (
+                    SELECT t.id FROM kb_ingest_task t
+                    WHERE t.document_id = d.id AND t.task_type = 'INGEST'
+                    ORDER BY t.create_time DESC
+                    LIMIT 1
+                )
+                WHERE d.tenant_id = :tenant_id AND d.deleted = 0
+                ORDER BY d.create_time DESC
                 LIMIT :limit OFFSET :offset
                 """
             ),
