@@ -396,6 +396,49 @@ class KnowledgeRepository:
         return dict(row) if row else None
 
     @staticmethod
+    async def find_documents_for_ops(
+        session: AsyncSession,
+        tenant_id: str,
+        document_id: str | None,
+        file_name_keyword: str | None,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        """按精确 ID 或文件名关键词查询知识运营所需的文档状态。
+
+        查询必须携带至少一个条件，由调用方完成输入校验；这里仍保留租户和
+        逻辑删除条件，防止 Agent 通过工具跨租户读取元数据。
+        """
+        result = await session.execute(
+            text(
+                """
+                SELECT d.id, d.file_name, d.status AS document_status, d.chunk_count, d.error_message,
+                       d.version_no, d.update_time,
+                       latest.id AS task_id, latest.status AS task_status, latest.retry_count,
+                       latest.started_at, latest.finished_at
+                FROM kb_document d
+                LEFT JOIN kb_ingest_task latest ON latest.id = (
+                    SELECT t.id FROM kb_ingest_task t
+                    WHERE t.document_id = d.id AND t.task_type = 'INGEST'
+                    ORDER BY t.create_time DESC
+                    LIMIT 1
+                )
+                WHERE d.tenant_id = :tenant_id AND d.deleted = 0
+                  AND (:document_id IS NULL OR d.id = :document_id)
+                  AND (:file_name_keyword IS NULL OR d.file_name LIKE CONCAT('%', :file_name_keyword, '%'))
+                ORDER BY d.update_time DESC
+                LIMIT :limit
+                """
+            ),
+            {
+                "tenant_id": tenant_id,
+                "document_id": document_id,
+                "file_name_keyword": file_name_keyword,
+                "limit": limit,
+            },
+        )
+        return [dict(row) for row in result.mappings().all()]
+
+    @staticmethod
     async def mark_document_deleted(session: AsyncSession, document_id: str) -> None:
         """逻辑删除文档和其切片元数据。"""
         await session.execute(

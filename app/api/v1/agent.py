@@ -11,7 +11,7 @@ Agent 智能对话接口
 
 import uuid
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from loguru import logger
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
@@ -24,6 +24,7 @@ from app.middleware.rate_limit import limiter
 from app.middleware.trace import get_trace_id
 from app.prompts.loader import get_prompt_loader
 from app.service.agent.graph import run_agent, run_agent_stream
+from app.service.agent.knowledge_ops import KnowledgeOpsAgent
 from app.service.agent.multi_agent import run_multi_agent
 from app.service.memory import ConversationMemory
 from app.service.token_tracker import get_token_tracker
@@ -64,6 +65,39 @@ class AgentRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=4000, description="用户消息")
     session_id: str | None = Field(default=None, description="会话 ID")
     stream: bool = Field(default=False, description="是否流式输出")
+
+
+class KnowledgeOpsRequest(BaseModel):
+    """知识运营 Agent 请求。"""
+
+    message: str = Field(..., min_length=1, max_length=2_000, description="管理员的知识运营问题")
+
+
+@router.post("/knowledge-ops", summary="知识运营 Agent（只读、可审计）")
+@limiter.limit("15/minute")
+async def knowledge_ops_agent(
+    request: Request,
+    req: KnowledgeOpsRequest,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """在当前租户内执行只读、可审计的知识库运营查询。"""
+    if user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅管理员可使用知识运营 Agent")
+
+    result = await KnowledgeOpsAgent(
+        tenant_id=user.tenant_id,
+        operator_id=user.user_id,
+        trace_id=get_trace_id(),
+    ).run(req.message)
+    return R.success(
+        data={
+            "answer": result.answer,
+            "tool_calls": result.tool_calls,
+            "total_tokens": result.total_tokens,
+            "rounds": result.rounds,
+        },
+        trace_id=get_trace_id(),
+    )
 
 
 @router.post("/chat", summary="智能对话（统一入口）")
