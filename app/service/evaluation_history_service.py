@@ -52,7 +52,7 @@ class EvaluationHistoryService:
         """Return recent runs scoped to the current tenant."""
         async with session_scope() as session:
             runs = await EvaluationRepository.list_runs(session, tenant_id, limit)
-        return [self._serialize_record(run) for run in runs]
+        return self._attach_comparisons([self._serialize_record(run) for run in runs])
 
     async def get_run_detail(self, tenant_id: str, run_id: str) -> dict[str, Any] | None:
         """Return one run with its configuration snapshot and all case results."""
@@ -87,6 +87,49 @@ class EvaluationHistoryService:
             "retrieval_config": json.dumps(config, ensure_ascii=False, sort_keys=True),
             "executed_by": operator_id,
         }
+
+    @staticmethod
+    def _attach_comparisons(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Compare each completed run with the nearest older comparable baseline.
+
+        The dataset checksum and executed case count must match. This prevents a smoke run
+        or a changed dataset from being presented as a quality regression.
+        """
+        metric_fields = (
+            "source_exact_match_rate",
+            "source_recall",
+            "answer_point_coverage",
+            "refusal_accuracy",
+            "average_latency_ms",
+        )
+        for index, current in enumerate(runs):
+            if current.get("status") != "COMPLETED":
+                current["comparison"] = {"comparable": False, "reason": "运行未完成"}
+                continue
+
+            baseline = next(
+                (
+                    candidate
+                    for candidate in runs[index + 1 :]
+                    if candidate.get("status") == "COMPLETED"
+                    and candidate.get("dataset_checksum") == current.get("dataset_checksum")
+                    and candidate.get("total") == current.get("total")
+                ),
+                None,
+            )
+            if baseline is None:
+                current["comparison"] = {"comparable": False, "reason": "首次基线或执行条数不同"}
+                continue
+
+            comparison: dict[str, Any] = {
+                "comparable": True,
+                "baseline_run_id": baseline["id"],
+                "baseline_git_commit": baseline.get("git_commit", "unknown"),
+            }
+            for field in metric_fields:
+                comparison[f"{field}_delta"] = round(float(current[field]) - float(baseline[field]), 4)
+            current["comparison"] = comparison
+        return runs
 
     @classmethod
     def _serialize_record(cls, record: dict[str, Any]) -> dict[str, Any]:

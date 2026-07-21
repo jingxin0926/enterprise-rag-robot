@@ -193,11 +193,33 @@ function formatEvaluationConfig(config) {
   return parts.join(" / ") || "-";
 }
 
+function formatPercentagePointDelta(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "-";
+  return `${numeric >= 0 ? "+" : ""}${(numeric * 100).toFixed(1)}pp`;
+}
+
+function formatEvaluationComparison(comparison) {
+  if (!comparison?.comparable) {
+    return `<span class="trend-baseline">${escapeHtml(comparison?.reason || "首次基线")}</span>`;
+  }
+  const recall = formatPercentagePointDelta(comparison.source_recall_delta);
+  const coverage = formatPercentagePointDelta(comparison.answer_point_coverage_delta);
+  const latency = Number(comparison.average_latency_ms_delta);
+  const latencyText = Number.isFinite(latency) ? `${latency >= 0 ? "+" : ""}${latency.toFixed(0)}ms` : "-";
+  const latencyClass = latency <= 0 ? "trend-positive" : "trend-negative";
+  return `
+    <div class="trend-line">召回 <span class="${Number(comparison.source_recall_delta) >= 0 ? "trend-positive" : "trend-negative"}">${recall}</span></div>
+    <div class="trend-line">覆盖 <span class="${Number(comparison.answer_point_coverage_delta) >= 0 ? "trend-positive" : "trend-negative"}">${coverage}</span></div>
+    <div class="trend-line">耗时 <span class="${latencyClass}">${latencyText}</span></div>
+  `;
+}
+
 function renderEvaluationHistory(items) {
   const body = $("#evaluation-history-list");
   body.innerHTML = "";
   if (!Array.isArray(items) || items.length === 0) {
-    body.innerHTML = '<tr><td class="table-empty" colspan="7">暂无历史评测运行</td></tr>';
+    body.innerHTML = '<tr><td class="table-empty" colspan="8">暂无历史评测运行</td></tr>';
     return;
   }
 
@@ -211,6 +233,7 @@ function renderEvaluationHistory(items) {
       <td>${formatPercent(item.source_recall)}</td>
       <td>${formatPercent(item.answer_point_coverage)}</td>
       <td>${Number(item.average_latency_ms || 0).toFixed(0)} ms</td>
+      <td class="trend-cell">${formatEvaluationComparison(item.comparison)}</td>
       <td><button class="ghost-btn history-detail-btn" type="button" data-run-id="${escapeHtml(item.id)}" ${completed ? "" : "disabled"}>查看</button></td>
     `;
     body.appendChild(row);

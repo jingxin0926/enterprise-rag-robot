@@ -191,6 +191,30 @@ button {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.trend-cell {
+  min-width: 130px;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.trend-line {
+  white-space: nowrap;
+}
+
+.trend-positive {
+  color: #087443;
+  font-weight: 700;
+}
+
+.trend-negative {
+  color: #b42318;
+  font-weight: 700;
+}
+
+.trend-baseline {
+  color: #667085;
+}
+
 .status-failed {
   background: #fef3f2;
   color: var(--danger);

@@ -62,6 +62,69 @@ def test_evaluation_history_migration_contains_run_and_case_tables() -> None:
     assert "uk_eval_case_run_case" in migration
 
 
+def test_evaluation_history_compares_only_same_dataset_and_case_count() -> None:
+    """Trend deltas need a comparable completed baseline, not a smoke run or changed dataset."""
+    runs = [
+        {
+            "id": "new-run",
+            "status": "COMPLETED",
+            "dataset_checksum": "dataset-a",
+            "total": 23,
+            "git_commit": "new",
+            "source_exact_match_rate": 0.32,
+            "source_recall": 0.68,
+            "answer_point_coverage": 0.58,
+            "refusal_accuracy": 1.0,
+            "average_latency_ms": 2955.0,
+        },
+        {
+            "id": "smoke-run",
+            "status": "COMPLETED",
+            "dataset_checksum": "dataset-a",
+            "total": 5,
+            "git_commit": "smoke",
+            "source_exact_match_rate": 0.4,
+            "source_recall": 0.8,
+            "answer_point_coverage": 0.8,
+            "refusal_accuracy": 1.0,
+            "average_latency_ms": 1000.0,
+        },
+        {
+            "id": "baseline-run",
+            "status": "COMPLETED",
+            "dataset_checksum": "dataset-a",
+            "total": 23,
+            "git_commit": "baseline",
+            "source_exact_match_rate": 0.26,
+            "source_recall": 0.58,
+            "answer_point_coverage": 0.49,
+            "refusal_accuracy": 1.0,
+            "average_latency_ms": 3376.0,
+        },
+        {
+            "id": "changed-dataset",
+            "status": "COMPLETED",
+            "dataset_checksum": "dataset-b",
+            "total": 23,
+            "git_commit": "old",
+            "source_exact_match_rate": 0.8,
+            "source_recall": 0.8,
+            "answer_point_coverage": 0.8,
+            "refusal_accuracy": 1.0,
+            "average_latency_ms": 1000.0,
+        },
+    ]
+
+    compared = EvaluationHistoryService._attach_comparisons(runs)
+
+    assert compared[0]["comparison"]["comparable"] is True
+    assert compared[0]["comparison"]["baseline_run_id"] == "baseline-run"
+    assert compared[0]["comparison"]["source_recall_delta"] == 0.1
+    assert compared[0]["comparison"]["average_latency_ms_delta"] == -421.0
+    assert compared[1]["comparison"]["comparable"] is False
+    assert compared[2]["comparison"]["comparable"] is False
+
+
 @pytest.mark.asyncio
 async def test_evaluation_execution_persists_completed_run_and_audit_log(monkeypatch: pytest.MonkeyPatch) -> None:
     """Successful execution must create a run, persist its summary, and write an audit record."""
