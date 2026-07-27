@@ -191,6 +191,81 @@ button {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.evaluation-case-detail {
+  display: grid;
+  gap: 18px;
+  padding: 18px;
+}
+
+.evaluation-case-metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0;
+  border: 1px solid var(--line);
+}
+
+.evaluation-case-metrics div {
+  min-width: 0;
+  padding: 12px;
+  border-right: 1px solid var(--line);
+}
+
+.evaluation-case-metrics div:last-child {
+  border-right: 0;
+}
+
+.evaluation-case-metrics dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.evaluation-case-metrics dd {
+  margin: 6px 0 0;
+  font-weight: 700;
+}
+
+.evaluation-case-source-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.evaluation-case-section {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: #fbfcfe;
+}
+
+.evaluation-case-section h3 {
+  margin: 0 0 9px;
+  font-size: 13px;
+}
+
+.evaluation-case-section p,
+.evaluation-case-section pre {
+  margin: 0;
+  color: #344054;
+  font: inherit;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.evaluation-source-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: #344054;
+  font-size: 13px;
+}
+
+.evaluation-empty {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .trend-cell {
   min-width: 130px;
   font-size: 12px;

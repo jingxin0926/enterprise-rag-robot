@@ -203,13 +203,25 @@
                       <th>事实覆盖</th>
                       <th>拒答</th>
                       <th>耗时</th>
+                      <th aria-label="诊断"></th>
                     </tr>
                   </thead>
                   <tbody id="evaluation-result-list">
-                    <tr><td class="table-empty" colspan="6">尚未执行评测</td></tr>
+                    <tr><td class="table-empty" colspan="7">尚未执行评测</td></tr>
                   </tbody>
                 </table>
               </div>
+            </section>
+
+            <section id="evaluation-case-detail-panel" class="panel document-panel hidden" aria-live="polite">
+              <div class="panel-header">
+                <div>
+                  <h2 id="evaluation-case-detail-title">用例诊断</h2>
+                  <span>用于定位检索、引用或回答覆盖问题</span>
+                </div>
+                <button id="evaluation-case-detail-close-btn" class="ghost-btn" type="button">关闭</button>
+              </div>
+              <div id="evaluation-case-detail" class="evaluation-case-detail"></div>
             </section>
 
             <section class="panel document-panel">

@@ -8,6 +8,7 @@ const state = {
 
 const ACTIVE_DOCUMENT_STATUSES = new Set(["PENDING", "PARSING", "CHUNKING", "INDEXING", "RUNNING", "RETRYING"]);
 let documentPollTimer = null;
+let currentEvaluationResults = [];
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -160,12 +161,14 @@ function renderEvaluation(data) {
   const body = $("#evaluation-result-list");
   body.innerHTML = "";
   const results = Array.isArray(data.results) ? data.results : [];
+  currentEvaluationResults = results;
   if (results.length === 0) {
-    body.innerHTML = '<tr><td class="table-empty" colspan="6">暂无评测结果</td></tr>';
+    body.innerHTML = '<tr><td class="table-empty" colspan="7">暂无评测结果</td></tr>';
+    hideEvaluationCaseDetail();
     return;
   }
 
-  results.forEach((result) => {
+  results.forEach((result, index) => {
     const sourcePassed = result.source_exact_match ? "通过" : "未通过";
     const refusalPassed = result.should_refuse ? (result.refusal_correct ? "通过" : "未通过") : "-";
     const row = document.createElement("tr");
@@ -176,9 +179,63 @@ function renderEvaluation(data) {
       <td>${formatPercent(result.answer_point_coverage)}</td>
       <td>${result.should_refuse ? `<span class="status-badge status-${result.refusal_correct ? "completed" : "failed"}">${refusalPassed}</span>` : "-"}</td>
       <td>${Number(result.latency_ms || 0).toFixed(0)} ms</td>
+      <td><button class="ghost-btn evaluation-case-detail-btn" type="button" data-result-index="${index}">诊断</button></td>
     `;
     body.appendChild(row);
   });
+}
+
+function formatEvaluationSources(sources) {
+  if (!Array.isArray(sources) || sources.length === 0) return '<span class="evaluation-empty">无</span>';
+  return `<ul class="evaluation-source-list">${sources.map((source) => `<li>${escapeHtml(String(source))}</li>`).join("")}</ul>`;
+}
+
+function hideEvaluationCaseDetail() {
+  $("#evaluation-case-detail-panel").classList.add("hidden");
+  $("#evaluation-case-detail").innerHTML = "";
+}
+
+function showEvaluationCaseDetail(event) {
+  const button = event.target.closest(".evaluation-case-detail-btn");
+  if (!button) return;
+
+  const index = Number(button.dataset.resultIndex);
+  const result = currentEvaluationResults[index];
+  if (!Number.isInteger(index) || !result) return;
+
+  const panel = $("#evaluation-case-detail-panel");
+  const title = $("#evaluation-case-detail-title");
+  const detail = $("#evaluation-case-detail");
+  title.textContent = `用例诊断: ${result.case_id || "-"}`;
+  detail.innerHTML = `
+    <dl class="evaluation-case-metrics">
+      <div><dt>回答状态</dt><dd>${escapeHtml(String(result.answer_status || "-"))}</dd></div>
+      <div><dt>来源召回</dt><dd>${formatPercent(result.source_recall)}</dd></div>
+      <div><dt>来源精确率</dt><dd>${formatPercent(result.source_precision)}</dd></div>
+      <div><dt>事实覆盖</dt><dd>${formatPercent(result.answer_point_coverage)}</dd></div>
+      <div><dt>耗时</dt><dd>${Number(result.latency_ms || 0).toFixed(0)} ms</dd></div>
+    </dl>
+    <div class="evaluation-case-section">
+      <h3>评测问题</h3>
+      <p>${escapeHtml(String(result.question || "-"))}</p>
+    </div>
+    <div class="evaluation-case-source-grid">
+      <section class="evaluation-case-section">
+        <h3>期望来源</h3>
+        ${formatEvaluationSources(result.expected_sources)}
+      </section>
+      <section class="evaluation-case-section">
+        <h3>实际来源</h3>
+        ${formatEvaluationSources(result.actual_sources)}
+      </section>
+    </div>
+    <div class="evaluation-case-section">
+      <h3>系统回答</h3>
+      <pre>${escapeHtml(String(result.answer || "-"))}</pre>
+    </div>
+  `;
+  panel.classList.remove("hidden");
+  panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 function formatEvaluationConfig(config) {
@@ -537,6 +594,8 @@ function bindEvents() {
   $("#run-evaluation-btn").addEventListener("click", runDatasetEvaluation);
   $("#evaluation-history-refresh-btn").addEventListener("click", () => refreshEvaluationHistory().catch((error) => showToast(error.message)));
   $("#evaluation-history-list").addEventListener("click", loadEvaluationRun);
+  $("#evaluation-result-list").addEventListener("click", showEvaluationCaseDetail);
+  $("#evaluation-case-detail-close-btn").addEventListener("click", hideEvaluationCaseDetail);
   $("#document-list").addEventListener("click", deleteDocument);
   $("#document-list").addEventListener("click", retryDocumentTask);
   $("#upload-form").addEventListener("submit", uploadDocuments);
