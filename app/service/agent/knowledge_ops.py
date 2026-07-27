@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import time
@@ -18,6 +19,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from app.core.config import settings
+from app.core.tenant import get_tenant_collection_name
 from app.infra.database.database import session_scope
 from app.prompts.loader import get_prompt_loader
 from app.repository.knowledge_repository import KnowledgeRepository
@@ -170,8 +172,13 @@ class KnowledgeOpsAgent:
                 raise ValueError(f"不允许调用工具: {tool_name}")
             arguments = json.loads(raw_arguments) if raw_arguments else {}
             validated_args = input_model.model_validate(arguments)
-            result_payload = await self._invoke_tool(tool_name, validated_args)
+            result_payload = await asyncio.wait_for(
+                self._invoke_tool(tool_name, validated_args),
+                timeout=settings.agent_tool_timeout_seconds,
+            )
             success = True
+        except TimeoutError:
+            result_payload = {"ok": False, "error": "工具调用超时，请缩小查询范围后重试"}
         except (json.JSONDecodeError, ValidationError, ValueError) as exc:
             result_payload = {"ok": False, "error": f"工具参数不合法: {exc}"}
         except Exception:  # 工具失败也必须审计，便于排障。
@@ -202,7 +209,8 @@ class KnowledgeOpsAgent:
     async def _search_knowledge(self, args: BaseModel) -> dict[str, Any]:
         """查询当前租户的混合检索器并保留来源证据。"""
         request = SearchKnowledgeInput.model_validate(args)
-        results = get_hybrid_retriever().search(query=request.query, top_k=request.top_k)
+        collection_name = get_tenant_collection_name(self._tenant_id)
+        results = get_hybrid_retriever(collection_name=collection_name).search(query=request.query, top_k=request.top_k)
         items = [
             {
                 "source": result.metadata.get("source", "未知来源"),

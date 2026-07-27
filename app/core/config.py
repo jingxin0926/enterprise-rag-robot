@@ -76,6 +76,12 @@ class AppSettings(BaseSettings):
     deepseek_temperature: float = Field(default=0.3, description="采样温度")
     deepseek_max_tokens: int = Field(default=2048, description="最大输出 token")
     deepseek_timeout: int = Field(default=60, description="请求超时（秒）")
+    agent_tool_timeout_seconds: int = Field(
+        default=10,
+        ge=1,
+        le=30,
+        description="知识运营 Agent 单次工具调用超时（秒）",
+    )
 
     # ============================================================
     # Redis（P1 会话记忆）
