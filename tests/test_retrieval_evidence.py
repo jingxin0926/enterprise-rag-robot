@@ -1,7 +1,9 @@
 """混合检索证据溯源与可信回答门禁测试。"""
 
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
+
+import pytest
 
 from app.infra.vector.qdrant_store import QdrantStore, SearchResult
 from app.service.rag_service import RAGService
@@ -42,6 +44,53 @@ def test_evidence_gate_requires_quality_bm25_or_strong_vector() -> None:
     )
 
     assert [item.content for item in accepted] == ["高质量双路", "强向量"]
+
+
+def test_multi_query_fusion_deduplicates_hits_and_preserves_best_raw_scores() -> None:
+    """同一片段命中原始问法和改写问法时应提升排序且保留最强原始分数。"""
+    rag_service = RAGService.__new__(RAGService)
+    rag_service._top_k = 5
+
+    merged = rag_service._merge_multi_query_results(
+        [
+            [
+                HybridResult(content="共享片段", score=0.03, vector_score=0.61, bm25_score=0.8, source_type="hybrid"),
+                HybridResult(content="原始问法片段", score=0.02, vector_score=0.75, source_type="hybrid"),
+            ],
+            [
+                HybridResult(content="共享片段", score=0.02, vector_score=0.67, bm25_score=1.4, source_type="hybrid"),
+                HybridResult(content="改写问法片段", score=0.02, bm25_score=1.2, source_type="hybrid"),
+            ],
+        ]
+    )
+
+    assert [item.content for item in merged] == ["共享片段", "原始问法片段", "改写问法片段"]
+    assert merged[0].vector_score == 0.67
+    assert merged[0].bm25_score == 1.4
+    assert merged[0].source_type == "hybrid+multi_query"
+
+
+@pytest.mark.asyncio
+async def test_retrieval_searches_original_and_rewritten_query() -> None:
+    """改写不可替代原始关键词，两个问法都必须参与召回。"""
+    rag_service = RAGService.__new__(RAGService)
+    rag_service._rewriter = Mock(rewrite=AsyncMock(return_value="图片逐张播放时长限制"))
+    rag_service._hybrid = Mock()
+    rag_service._hybrid.search.side_effect = [
+        [HybridResult(content="原始关键词片段", score=0.03, vector_score=0.74, source_type="hybrid")],
+        [HybridResult(content="改写关键词片段", score=0.03, bm25_score=1.3, source_type="hybrid")],
+    ]
+    rag_service._score_threshold = 0.3
+    rag_service._top_k = 5
+
+    results, rewritten = await rag_service._retrieve("图片合成视频时每张图片停留时长限制")
+
+    assert rewritten == "图片逐张播放时长限制"
+    assert [item.content for item in results] == ["原始关键词片段", "改写关键词片段"]
+    assert [call.kwargs["query"] for call in rag_service._hybrid.search.call_args_list] == [
+        "图片合成视频时每张图片停留时长限制",
+        "图片逐张播放时长限制",
+    ]
 
 
 def test_context_expansion_adds_only_adjacent_chunks_from_same_document() -> None:

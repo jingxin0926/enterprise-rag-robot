@@ -163,30 +163,86 @@ class RAGService:
         if self._rewriter:
             rewritten = await self._rewriter.rewrite(question)
 
-        if self._hybrid:
-            results = self._hybrid.search(
-                query=rewritten,
-                top_k=self._top_k,
-                score_threshold=self._score_threshold,
-            )
-        else:
-            vector_results = self._vector_store.search(
-                query=rewritten,
-                top_k=self._top_k,
-                score_threshold=self._score_threshold,
-            )
-            results = [
-                HybridResult(
-                    content=result.content,
-                    score=result.score,
-                    metadata=result.metadata,
-                    source_type="vector",
-                    vector_score=result.score,
-                )
-                for result in vector_results
-            ]
+        queries = [question]
+        if rewritten.strip() and rewritten.strip() != question.strip():
+            queries.append(rewritten)
 
-        return results, rewritten
+        result_sets: list[list[HybridResult]] = []
+        for retrieval_query in queries:
+            if self._hybrid:
+                results = self._hybrid.search(
+                    query=retrieval_query,
+                    top_k=self._top_k,
+                    score_threshold=self._score_threshold,
+                )
+            else:
+                vector_results = self._vector_store.search(
+                    query=retrieval_query,
+                    top_k=self._top_k,
+                    score_threshold=self._score_threshold,
+                )
+                results = [
+                    HybridResult(
+                        content=result.content,
+                        score=result.score,
+                        metadata=result.metadata,
+                        source_type="vector",
+                        vector_score=result.score,
+                    )
+                    for result in vector_results
+                ]
+            result_sets.append(results)
+
+        merged_results = self._merge_multi_query_results(result_sets)
+        logger.info(
+            "[RAG-MultiQuery] original='{}...' rewritten='{}...' routes={} merged_hits={}",
+            question[:30],
+            rewritten[:30],
+            len(queries),
+            len(merged_results),
+        )
+
+        return merged_results, rewritten
+
+    def _merge_multi_query_results(self, result_sets: list[list[HybridResult]]) -> list[HybridResult]:
+        """Fuse original and rewritten-query hits without losing gateable raw scores."""
+        if len(result_sets) == 1:
+            return result_sets[0]
+
+        fused: dict[str, HybridResult] = {}
+        scores: dict[str, float] = {}
+        for results in result_sets:
+            for rank, result in enumerate(results, start=1):
+                content_key = result.content
+                scores[content_key] = scores.get(content_key, 0.0) + 1 / (60 + rank)
+                existing = fused.get(content_key)
+                if existing is None:
+                    fused[content_key] = HybridResult(
+                        content=result.content,
+                        score=0.0,
+                        metadata=result.metadata,
+                        source_type=f"{result.source_type}+multi_query",
+                        vector_score=result.vector_score,
+                        bm25_score=result.bm25_score,
+                        rrf_score=result.rrf_score,
+                    )
+                    continue
+
+                if result.vector_score is not None and (
+                    existing.vector_score is None or result.vector_score > existing.vector_score
+                ):
+                    existing.vector_score = result.vector_score
+                if result.bm25_score is not None and (
+                    existing.bm25_score is None or result.bm25_score > existing.bm25_score
+                ):
+                    existing.bm25_score = result.bm25_score
+
+        merged = list(fused.values())
+        for result in merged:
+            result.score = scores[result.content]
+            result.rrf_score = result.score
+        merged.sort(key=lambda result: result.score, reverse=True)
+        return merged[: self._top_k]
 
     def _filter_sufficient_evidence(self, results: list[HybridResult]) -> list[HybridResult]:
         """只保留双路一致或高语义相似度证据，避免无依据生成。"""
